@@ -1,6 +1,6 @@
 # Vuqiro Implementation Progress
 
-Current batch: Batch 6 — Discover, search, comments and social UX
+Current batch: Batch 7 — Supabase backend, auth and database
 
 Completed batches:
 
@@ -9,10 +9,10 @@ Completed batches:
 - Batch 3 — Shared packages and mock data (docs/implementation/batch-003-shared-packages.md)
 - Batch 4 — Admin and superadmin foundation (docs/implementation/batch-004-admin-foundation.md)
 - Batch 5 — Video adapter and feed UX (docs/implementation/batch-005-video-feed.md)
+- Batch 6 — Discover, search, comments and social UX (docs/implementation/batch-006-social-ux.md)
 
 Remaining batches:
 
-- Batch 6 — Discover, search, comments and social UX
 - Batch 7 — Supabase backend, auth and database
 - Batch 8 — API contracts and backend service layer
 - Batch 9 — Real video upload and processing
@@ -48,4 +48,4 @@ Commands run:
 - pnpm dev:admin (HTTP 200 check)
 - pnpm dev:api (/health check)
 
-Next action: Batch 6 — full discover/search, comment interactions and social action flows.
+Next action: Batch 7 — full Supabase schema with RLS, auth and session provider.

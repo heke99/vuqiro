@@ -9,14 +9,39 @@ import { Button } from "../../components/Button";
 import { Card } from "../../components/Card";
 import { Screen } from "../../components/Screen";
 import { colors, gradients, spacing } from "../../design/theme";
+import { useSocial } from "../social/SocialContext";
 
 export function CreatorProfileScreen({ creatorId }: { creatorId: string }) {
   const router = useRouter();
+  const social = useSocial();
   const creator = mockCreators.find((item) => item.id === creatorId) ?? mockCreators[0];
   const videos = mockVideos.filter((video) => video.creatorId === creator.id);
+  const following = social.isFollowing(creator.id);
+  const blocked = social.isBlocked(creator.id);
   const onSubscribe = () =>
     router.push({ pathname: "/modals/subscribe", params: { creatorId: creator.id } });
   const onCoins = () => router.push({ pathname: "/modals/coins", params: { creatorId: creator.id } });
+
+  if (blocked) {
+    return (
+      <Screen>
+        <Button
+          label="Back"
+          variant="ghost"
+          onPress={() => router.back()}
+          style={{ alignSelf: "flex-start", marginBottom: spacing.md }}
+        />
+        <Card style={{ alignItems: "center", gap: spacing.sm, padding: spacing.xl }}>
+          <Text style={styles.name}>@{creator.handle} is blocked</Text>
+          <Text style={styles.bio}>
+            You won&apos;t see their videos or comments, and they can&apos;t interact with you.
+          </Text>
+          <Button label="Unblock" variant="ghost" onPress={() => social.toggleBlock(creator.id)} />
+        </Card>
+      </Screen>
+    );
+  }
+
   return (
     <Screen>
       <View style={styles.topRow}>
@@ -26,16 +51,19 @@ export function CreatorProfileScreen({ creatorId }: { creatorId: string }) {
           onPress={() => router.back()}
           style={{ alignSelf: "flex-start" }}
         />
-        <Button
-          label="Report"
-          variant="ghost"
-          onPress={() =>
-            router.push({
-              pathname: "/modals/report",
-              params: { targetType: "profile", targetId: creator.id }
-            })
-          }
-        />
+        <View style={{ flexDirection: "row", gap: spacing.sm }}>
+          <Button label="Block" variant="ghost" onPress={() => social.toggleBlock(creator.id)} />
+          <Button
+            label="Report"
+            variant="ghost"
+            onPress={() =>
+              router.push({
+                pathname: "/modals/report",
+                params: { targetType: "profile", targetId: creator.id }
+              })
+            }
+          />
+        </View>
       </View>
       <LinearGradient colors={gradients[creator.bannerTone]} style={styles.banner}>
         <Avatar name={creator.displayName} size={86} />
@@ -49,8 +77,14 @@ export function CreatorProfileScreen({ creatorId }: { creatorId: string }) {
         </View>
       </LinearGradient>
       <View style={styles.actions}>
+        <Button
+          label={following ? "Following" : "Follow"}
+          variant={following ? "ghost" : "secondary"}
+          onPress={() => social.toggleFollow(creator.id)}
+          style={{ flex: 1 }}
+        />
         <Button label="Subscribe" onPress={onSubscribe} style={{ flex: 1 }} />
-        <Button label="Support with coins" variant="ghost" onPress={onCoins} style={{ flex: 1 }} />
+        <Button label="Send coins" variant="ghost" onPress={onCoins} style={{ flex: 1 }} />
       </View>
       <View style={styles.tabs}>
         <Badge label="Videos" />

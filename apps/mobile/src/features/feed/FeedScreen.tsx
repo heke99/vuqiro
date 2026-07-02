@@ -3,6 +3,7 @@ import { FlatList, Pressable, StyleSheet, Text, View, useWindowDimensions } from
 import type { ViewToken } from "react-native";
 import { mockCreators, mockVideos } from "@vuqiro/mock-data";
 import { colors, spacing } from "../../design/theme";
+import { useSocial } from "../social/SocialContext";
 import { trackEvent } from "../video/videoEvents";
 import { FeedItem } from "./FeedItem";
 
@@ -10,6 +11,7 @@ type FeedTab = "for_you" | "following";
 
 export function FeedScreen() {
   const { height } = useWindowDimensions();
+  const social = useSocial();
   const [activeIndex, setActiveIndex] = useState(0);
   const [feedTab, setFeedTab] = useState<FeedTab>("for_you");
 
@@ -18,15 +20,19 @@ export function FeedScreen() {
   }, [feedTab]);
 
   const data = useMemo(() => {
+    // Blocked creators are always hidden, in every feed.
+    const visible = mockVideos.filter((video) => !social.isBlocked(video.creatorId));
     if (feedTab === "following") {
-      // Mock "Following": videos from verified creators the demo user follows.
-      return mockVideos.filter((video) => {
+      const followed = visible.filter((video) => social.isFollowing(video.creatorId));
+      if (followed.length > 0) return followed;
+      // Cold-start fallback until the user follows someone: verified creators.
+      return visible.filter((video) => {
         const creator = mockCreators.find((candidate) => candidate.id === video.creatorId);
         return creator?.isVerified;
       });
     }
-    return mockVideos;
-  }, [feedTab]);
+    return visible;
+  }, [feedTab, social]);
 
   const onViewableItemsChanged = useRef(({ viewableItems }: { viewableItems: ViewToken[] }) => {
     const visible = viewableItems.find((token) => token.isViewable);

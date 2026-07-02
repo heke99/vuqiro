@@ -4,6 +4,7 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 import { Button } from "../../components/Button";
 import { Card } from "../../components/Card";
 import { Screen } from "../../components/Screen";
+import { useSocial } from "../social/SocialContext";
 import { colors, spacing } from "../../design/theme";
 
 const legalLinks: { label: string; href: Href }[] = [
@@ -16,6 +17,8 @@ const legalLinks: { label: string; href: Href }[] = [
 
 export function SettingsScreen() {
   const router = useRouter();
+  const { blockedUserIds } = useSocial();
+  const blockedCount = blockedUserIds.size;
   const [deleteRequested, setDeleteRequested] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
 
@@ -43,7 +46,7 @@ export function SettingsScreen() {
       <Text style={styles.sectionTitle}>Privacy</Text>
       <Card style={styles.row}>
         <Text style={styles.link}>Blocked accounts</Text>
-        <Text style={styles.chevron}>›</Text>
+        <Text style={styles.supportEmail}>{blockedCount}</Text>
       </Card>
       <Card style={styles.row}>
         <Text style={styles.link}>Notification preferences</Text>

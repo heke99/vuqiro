@@ -8,6 +8,7 @@ import { Badge } from "../../components/Badge";
 import { Button } from "../../components/Button";
 import { VideoActionButton } from "../../components/VideoActionButton";
 import { colors, spacing } from "../../design/theme";
+import { useSocial } from "../social/SocialContext";
 import { VideoPlayer } from "../video/VideoPlayer";
 import { trackEvent } from "../video/videoEvents";
 import type { FeedItemState } from "../video/videoTypes";
@@ -41,10 +42,13 @@ export function FeedItem({
   isActive: boolean;
 }) {
   const router = useRouter();
-  const [liked, setLiked] = useState(false);
-  const [saved, setSaved] = useState(false);
+  const social = useSocial();
   const [ageConfirmed, setAgeConfirmed] = useState(false);
   const lastProgressBucket = useRef(-1);
+
+  const liked = social.isLiked(video.id);
+  const saved = social.isSaved(video.id);
+  const following = social.isFollowing(creator.id);
 
   const state = deriveFeedItemState(video);
   const locked = state === "subscriber_only" || state === "unlock_with_coins" || state === "premium";
@@ -52,19 +56,8 @@ export function FeedItem({
   const needsAgeGate = state === "age_restricted" && !ageConfirmed;
   const canPlay = isActive && !locked && !hidden && !needsAgeGate;
 
-  const toggleLike = () => {
-    setLiked((value) => {
-      if (!value) trackEvent("video_like", { videoId: video.id, creatorId: creator.id });
-      return !value;
-    });
-  };
-
-  const toggleSave = () => {
-    setSaved((value) => {
-      if (!value) trackEvent("video_save", { videoId: video.id, creatorId: creator.id });
-      return !value;
-    });
-  };
+  const toggleLike = () => social.toggleLike(video.id, creator.id);
+  const toggleSave = () => social.toggleSave(video.id, creator.id);
 
   return (
     <View style={[styles.container, { height }]}>
@@ -178,6 +171,11 @@ export function FeedItem({
             </View>
             <Text style={styles.handle}>@{creator.handle}</Text>
           </View>
+          <Pressable style={[styles.followChip, following && styles.followChipOn]} onPress={() => social.toggleFollow(creator.id)}>
+            <Text style={[styles.followChipText, following && styles.followChipTextOn]}>
+              {following ? "Following" : "Follow"}
+            </Text>
+          </Pressable>
         </Pressable>
         <Text style={styles.caption}>{video.caption}</Text>
         <View style={styles.badgeRow}>
@@ -236,5 +234,15 @@ const styles = StyleSheet.create({
   caption: { color: colors.text, fontSize: 16, lineHeight: 22 },
   badgeRow: { flexDirection: "row", gap: spacing.sm },
   hashtags: { color: colors.secondary, fontWeight: "800" },
-  ctaRow: { flexDirection: "row", gap: spacing.sm, marginTop: spacing.xs }
+  ctaRow: { flexDirection: "row", gap: spacing.sm, marginTop: spacing.xs },
+  followChip: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: 6,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: colors.secondary
+  },
+  followChipOn: { backgroundColor: colors.secondarySoft },
+  followChipText: { color: colors.secondary, fontWeight: "900", fontSize: 12 },
+  followChipTextOn: { color: colors.text }
 });

@@ -4,21 +4,26 @@ import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { mockComments } from "@vuqiro/mock-data";
 import type { Comment } from "@vuqiro/types";
 import { Avatar } from "../../src/components/Avatar";
+import { Badge } from "../../src/components/Badge";
 import { ModalShell } from "../../src/components/ModalShell";
+import { useSocial } from "../../src/features/social/SocialContext";
+import { trackEvent } from "../../src/features/video/videoEvents";
 import { colors, radii, spacing } from "../../src/design/theme";
 
 function CommentRow({ comment, replies }: { comment: Comment; replies: Comment[] }) {
   const router = useRouter();
+  const social = useSocial();
   const [liked, setLiked] = useState(false);
   return (
     <View style={styles.commentBlock}>
       <View style={styles.commentRow}>
         <Avatar name={comment.authorDisplayName} size={34} />
         <View style={{ flex: 1 }}>
-          <Text style={styles.author}>
-            {comment.authorDisplayName}
-            {comment.isCreator ? "  · Creator" : comment.isSubscriber ? "  · Subscriber" : ""}
-          </Text>
+          <View style={styles.authorRow}>
+            <Text style={styles.author}>{comment.authorDisplayName}</Text>
+            {comment.isCreator ? <Badge label="Creator" tone="secondary" /> : null}
+            {!comment.isCreator && comment.isSubscriber ? <Badge label="Subscriber" /> : null}
+          </View>
           <Text style={styles.text}>{comment.text}</Text>
           <View style={styles.actions}>
             <Pressable onPress={() => setLiked((value) => !value)}>
@@ -26,7 +31,7 @@ function CommentRow({ comment, replies }: { comment: Comment; replies: Comment[]
                 {liked ? "Liked" : "Like"} · {comment.likeCount + (liked ? 1 : 0)}
               </Text>
             </Pressable>
-            <Text style={styles.action}>Reply</Text>
+            <Text style={styles.action}>Reply{comment.replyCount > 0 ? ` (${comment.replyCount})` : ""}</Text>
             <Pressable
               onPress={() =>
                 router.push({
@@ -36,6 +41,9 @@ function CommentRow({ comment, replies }: { comment: Comment; replies: Comment[]
               }
             >
               <Text style={styles.action}>Report</Text>
+            </Pressable>
+            <Pressable onPress={() => social.toggleBlock(comment.authorId)}>
+              <Text style={styles.action}>Block</Text>
             </Pressable>
           </View>
         </View>
@@ -58,11 +66,14 @@ function CommentRow({ comment, replies }: { comment: Comment; replies: Comment[]
 
 export default function CommentSheet() {
   const { videoId } = useLocalSearchParams<{ videoId?: string }>();
+  const social = useSocial();
   const [draft, setDraft] = useState("");
   const [localComments, setLocalComments] = useState<Comment[]>([]);
 
   const { topLevel, repliesByParent } = useMemo(() => {
-    const forVideo = mockComments.filter((comment) => comment.videoId === (videoId ?? "video_001"));
+    const forVideo = mockComments.filter(
+      (comment) => comment.videoId === (videoId ?? "video_001") && !social.isBlocked(comment.authorId)
+    );
     const topLevelComments = forVideo.filter((comment) => !comment.parentCommentId);
     const replyMap = new Map<string, Comment[]>();
     for (const comment of forVideo) {
@@ -74,11 +85,12 @@ export default function CommentSheet() {
       }
     }
     return { topLevel: topLevelComments, repliesByParent: replyMap };
-  }, [videoId]);
+  }, [videoId, social]);
 
   const submit = () => {
     const text = draft.trim();
     if (!text) return;
+    trackEvent("comment_submit", { videoId: videoId ?? "video_001" });
     setLocalComments((current) => [
       {
         id: `local_${Date.now()}`,
@@ -145,7 +157,8 @@ const styles = StyleSheet.create({
   commentBlock: { marginBottom: spacing.md },
   commentRow: { flexDirection: "row", gap: spacing.md },
   replyRow: { marginLeft: 44, marginTop: spacing.sm },
-  author: { color: colors.textMuted, fontSize: 12, fontWeight: "800", marginBottom: 2 },
+  author: { color: colors.textMuted, fontSize: 12, fontWeight: "800" },
+  authorRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm, marginBottom: 2 },
   text: { color: colors.text, lineHeight: 20 },
   actions: { flexDirection: "row", gap: spacing.md, marginTop: 4 },
   action: { color: colors.textMuted, fontSize: 12, fontWeight: "800" },
