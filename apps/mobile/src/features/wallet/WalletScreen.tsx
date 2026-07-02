@@ -1,3 +1,4 @@
+import { useRouter } from "expo-router";
 import React from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { mockWalletTransactions } from "@vuqiro/mock-data";
@@ -6,7 +7,9 @@ import { CoinPackCard } from "../../components/CoinPackCard";
 import { Screen } from "../../components/Screen";
 import { colors, spacing } from "../../design/theme";
 
-export function WalletScreen({ onBuy }: { onBuy: () => void }) {
+export function WalletScreen() {
+  const router = useRouter();
+  const onBuy = () => router.push("/modals/coins");
   return (
     <Screen>
       <Text style={styles.kicker}>Wallet</Text>

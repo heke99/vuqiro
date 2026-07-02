@@ -8,6 +8,8 @@ import type {
   ModerationCase
 } from "@vuqiro/types";
 
+export * from "./social";
+
 export const mockCreators: Creator[] = [
   {
     id: "creator_001",

@@ -3,5 +3,5 @@
   "compilerOptions": {
     "jsx": "react-jsx"
   },
-  "include": ["App.tsx", "src"]
+  "include": ["app", "src", "expo-env.d.ts", ".expo/types/**/*.ts"]
 }

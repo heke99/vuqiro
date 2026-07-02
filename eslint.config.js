@@ -5,11 +5,12 @@ const prettier = require("eslint-config-prettier");
 module.exports = [
   {
     ignores: [
-      "node_modules/**",
-      ".expo/**",
-      ".next/**",
-      "dist/**",
-      "build/**",
+      "**/node_modules/**",
+      "**/.expo/**",
+      "**/.next/**",
+      "**/dist/**",
+      "**/build/**",
+      "**/coverage/**",
       "references/open-source/**"
     ]
   },

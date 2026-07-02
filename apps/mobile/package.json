@@ -2,7 +2,7 @@
   "name": "mobile",
   "version": "0.1.0",
   "private": true,
-  "main": "expo/AppEntry.js",
+  "main": "expo-router/entry",
   "scripts": {
     "dev": "expo start",
     "dev:clear": "expo start --clear",
@@ -21,12 +21,16 @@
     "@vuqiro/types": "workspace:*",
     "@vuqiro/ui": "workspace:*",
     "expo": "~57.0.1",
+    "expo-constants": "~57.0.2",
     "expo-linear-gradient": "~57.0.0",
+    "expo-linking": "~57.0.1",
+    "expo-router": "~57.0.2",
     "expo-status-bar": "~57.0.0",
     "react": "19.2.7",
     "react-dom": "19.2.3",
     "react-native": "0.86.0",
     "react-native-safe-area-context": "~5.8.0",
+    "react-native-screens": "4.25.2",
     "react-native-web": "^0.21.2"
   },
   "devDependencies": {

@@ -19,6 +19,9 @@
     },
     "extra": {
       "companyName": "Diversa Solutions LLC"
-    }
+    },
+    "plugins": [
+      "expo-router"
+    ]
   }
 }

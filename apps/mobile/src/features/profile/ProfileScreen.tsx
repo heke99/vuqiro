@@ -1,3 +1,4 @@
+import { useRouter } from "expo-router";
 import React from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { Avatar } from "../../components/Avatar";
@@ -7,7 +8,9 @@ import { Card } from "../../components/Card";
 import { Screen } from "../../components/Screen";
 import { colors, spacing } from "../../design/theme";
 
-export function ProfileScreen({ onSettings }: { onSettings: () => void }) {
+export function ProfileScreen() {
+  const router = useRouter();
+  const onSettings = () => router.push("/settings");
   return (
     <Screen>
       <View style={styles.header}>

@@ -1,4 +1,5 @@
 import { LinearGradient } from "expo-linear-gradient";
+import { useRouter } from "expo-router";
 import React from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { mockCreators, mockVideos } from "@vuqiro/mock-data";
@@ -9,12 +10,33 @@ import { Card } from "../../components/Card";
 import { Screen } from "../../components/Screen";
 import { colors, gradients, spacing } from "../../design/theme";
 
-export function CreatorProfileScreen({ creatorId, onSubscribe, onCoins, onBack }: { creatorId: string; onSubscribe: (creatorId: string) => void; onCoins: () => void; onBack: () => void }) {
+export function CreatorProfileScreen({ creatorId }: { creatorId: string }) {
+  const router = useRouter();
   const creator = mockCreators.find((item) => item.id === creatorId) ?? mockCreators[0];
   const videos = mockVideos.filter((video) => video.creatorId === creator.id);
+  const onSubscribe = () =>
+    router.push({ pathname: "/modals/subscribe", params: { creatorId: creator.id } });
+  const onCoins = () => router.push({ pathname: "/modals/coins", params: { creatorId: creator.id } });
   return (
     <Screen>
-      <Button label="Back" variant="ghost" onPress={onBack} style={{ alignSelf: "flex-start", marginBottom: spacing.md }} />
+      <View style={styles.topRow}>
+        <Button
+          label="Back"
+          variant="ghost"
+          onPress={() => router.back()}
+          style={{ alignSelf: "flex-start" }}
+        />
+        <Button
+          label="Report"
+          variant="ghost"
+          onPress={() =>
+            router.push({
+              pathname: "/modals/report",
+              params: { targetType: "profile", targetId: creator.id }
+            })
+          }
+        />
+      </View>
       <LinearGradient colors={gradients[creator.bannerTone]} style={styles.banner}>
         <Avatar name={creator.displayName} size={86} />
         <Text style={styles.name}>{creator.displayName} {creator.isVerified ? "✓" : ""}</Text>
@@ -27,7 +49,7 @@ export function CreatorProfileScreen({ creatorId, onSubscribe, onCoins, onBack }
         </View>
       </LinearGradient>
       <View style={styles.actions}>
-        <Button label="Subscribe" onPress={() => onSubscribe(creator.id)} style={{ flex: 1 }} />
+        <Button label="Subscribe" onPress={onSubscribe} style={{ flex: 1 }} />
         <Button label="Support with coins" variant="ghost" onPress={onCoins} style={{ flex: 1 }} />
       </View>
       <View style={styles.tabs}>
@@ -50,6 +72,12 @@ export function CreatorProfileScreen({ creatorId, onSubscribe, onCoins, onBack }
 }
 
 const styles = StyleSheet.create({
+  topRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: spacing.md
+  },
   banner: { borderRadius: 28, padding: spacing.xl, alignItems: "center", gap: spacing.sm, overflow: "hidden" },
   name: { color: colors.text, fontSize: 28, fontWeight: "900", marginTop: spacing.sm },
   handle: { color: colors.textMuted },
