@@ -1,6 +1,6 @@
 # Vuqiro Implementation Progress
 
-Current batch: Batch 23 — Launch checklist
+Current batch: All 23 batches complete
 
 Completed batches:
 
@@ -26,27 +26,30 @@ Completed batches:
 - Batch 20 — App Store and Google Play readiness (docs/implementation/batch-020-store-readiness.md)
 - Batch 21 — EAS builds and internal testing (docs/implementation/batch-021-eas-builds.md)
 - Batch 22 — Production hardening (docs/implementation/batch-022-production-hardening.md)
+- Batch 23 — Launch checklist (docs/launch/go-live-checklist.md, docs/implementation/final-build-report.md)
 
 Remaining batches:
 
-- Batch 23 — Launch checklist
+- None. Remaining work is owner-side external setup — see
+  docs/launch/go-live-checklist.md (accounts, credentials, sandbox/device
+  test passes, attorney review, screenshots, backups/monitoring config).
 
 Known issues:
 
-- Real auth requires Supabase env vars; mock mode otherwise (by design).
-- Webhook processing pipelines complete in Batches 13 (RevenueCat) and 15 (Stripe).
-- Provider adapters are contracts + mocks only until Batches 9/13/15.
-- Social actions (follow/like/save) are local mock state until Batch 10.
+- Live provider verification (Mux/RevenueCat/Stripe) pending owner accounts;
+  staging test plans in docs/testing/ close this.
+- In-memory rate limiting assumes one API instance (Redis noted for scale).
+- Membership creator-attribution via RevenueCat subscriber attribute needs a
+  sandbox end-to-end pass.
+- Legal outlines require attorney finalization before store submission.
 
 Commands run:
 
-- pnpm install
-- pnpm lint
-- pnpm typecheck
-- pnpm test
-- npx expo export --platform web (mobile bundle verification, expo-router entry)
-- pnpm dev:admin (HTTP 200 check)
-- pnpm dev:api (/health check)
-- bash scripts/validate-migrations.sh (37 tables, all RLS-enabled)
+- pnpm install / lint / typecheck / test (136 tests green)
+- bash scripts/validate-migrations.sh (39 tables, all RLS, wallet integrity assertions)
+- npx expo export --platform web (bundles cleanly)
+- npx expo-doctor (20/20), npx expo prebuild (both platforms clean)
+- pnpm dev:admin (all 19 routes HTTP 200), pnpm dev:api (/health + live endpoints)
+- node scripts/generate-app-assets.mjs (icons/splash)
 
-Next action: Batch 23 — go-live checklist and final build report.
+Next action: Owner completes the go-live checklist (docs/launch/go-live-checklist.md), then tag v1.0.0 and submit to TestFlight / Play internal testing.
