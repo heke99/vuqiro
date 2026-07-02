@@ -1,14 +1,14 @@
 # Vuqiro Implementation Progress
 
-Current batch: Batch 2 — Mobile app foundation (Expo Router)
+Current batch: Batch 3 — Shared packages and mock data
 
 Completed batches:
 
 - Batch 1 — Repository repair and foundation (docs/implementation/batch-001-foundation.md)
+- Batch 2 — Mobile app foundation with Expo Router (docs/implementation/batch-002-mobile-foundation.md)
 
 Remaining batches:
 
-- Batch 2 — Mobile app foundation
 - Batch 3 — Shared packages and mock data
 - Batch 4 — Admin and superadmin foundation
 - Batch 5 — Video adapter and feed UX
@@ -33,9 +33,10 @@ Remaining batches:
 
 Known issues:
 
-- Mobile still uses manual state navigation in `App.tsx` (Expo Router lands in Batch 2).
+- Mobile auth is mock-gated until Supabase auth (Batch 7).
 - Supabase migration is a draft without RLS/auth (rebuilt in Batch 7).
 - Provider adapters are contracts + mocks only until Batches 9/13/15.
+- Mock data volume is below spec minimums until Batch 3.
 
 Commands run:
 
@@ -43,8 +44,8 @@ Commands run:
 - pnpm lint
 - pnpm typecheck
 - pnpm test
-- npx expo export --platform web (mobile bundle verification)
+- npx expo export --platform web (mobile bundle verification, expo-router entry)
 - pnpm dev:admin (HTTP 200 check)
 - pnpm dev:api (/health check)
 
-Next action: Batch 2 — migrate mobile to Expo Router with the full route tree and all screens/modals on mock data.
+Next action: Batch 3 — expand shared types to the full domain model and mock data to spec minimums.
