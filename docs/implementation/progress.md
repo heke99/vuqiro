@@ -1,6 +1,6 @@
 # Vuqiro Implementation Progress
 
-Current batch: Batch 16 — Creator studio
+Current batch: Batch 17 — Notifications
 
 Completed batches:
 
@@ -19,10 +19,10 @@ Completed batches:
 - Batch 13 — RevenueCat payments (docs/implementation/batch-013-revenuecat.md)
 - Batch 14 — Wallet, coins, unlocks, tips and boosts (docs/implementation/batch-014-wallet-economy.md)
 - Batch 15 — Stripe Connect creator payouts (docs/implementation/batch-015-stripe-payouts.md)
+- Batch 16 — Creator studio (docs/implementation/batch-016-creator-studio.md)
 
 Remaining batches:
 
-- Batch 16 — Creator studio
 - Batch 17 — Notifications
 - Batch 18 — Fraud, abuse and safety hardening
 - Batch 19 — Legal, privacy and compliance
@@ -49,4 +49,4 @@ Commands run:
 - pnpm dev:api (/health check)
 - bash scripts/validate-migrations.sh (37 tables, all RLS-enabled)
 
-Next action: Batch 16 — creator studio screens with own-data permissions.
+Next action: Batch 17 — notification system with inbox, preferences and push scaffold.

@@ -30,6 +30,13 @@ export function ProfileScreen() {
         <Card style={styles.stat}><Text style={styles.statValue}>8</Text><Text style={styles.statLabel}>Subs</Text></Card>
         <Card style={styles.stat}><Text style={styles.statValue}>1.2k</Text><Text style={styles.statLabel}>Coins</Text></Card>
       </View>
+      <Text style={styles.sectionTitle}>Creator studio</Text>
+      <Card style={{ gap: spacing.sm }}>
+        <Text style={styles.copy}>
+          Manage your videos, subscribers, revenue, payouts and moderation standing.
+        </Text>
+        <Button label="Open creator studio" onPress={() => router.push("/studio")} />
+      </Card>
       <Text style={styles.sectionTitle}>Your access</Text>
       <Card style={{ gap: spacing.sm }}>
         <Badge label="Creator Support active" tone="secondary" />

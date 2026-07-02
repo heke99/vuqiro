@@ -9,6 +9,7 @@ import { analyticsRoutes } from "./routes/analytics";
 import { appealRoutes } from "./routes/appeals";
 import { commentRoutes } from "./routes/comments";
 import { creatorRoutes } from "./routes/creators";
+import { creatorStudioRoutes } from "./routes/creatorStudio";
 import { discoveryRoutes } from "./routes/discovery";
 import { eventRoutes } from "./routes/events";
 import { feedRoutes } from "./routes/feed";
@@ -47,6 +48,9 @@ export function createApp() {
   );
 
   app.route("/feed", feedRoutes);
+  // Studio routes must precede discovery: /creators/me/* would otherwise be
+  // captured by the public /creators/:id/videos matcher.
+  app.route("/", creatorStudioRoutes); // /creators/me/*, /creators/onboard
   app.route("/", discoveryRoutes); // GET /search, /discover/trending, /creators/:id/videos
   app.route("/", eventRoutes); // POST /events
   app.route("/", analyticsRoutes); // GET /admin/analytics, GET /creators/me/analytics
