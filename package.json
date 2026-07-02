@@ -7,18 +7,23 @@
   "scripts": {
     "dev": "pnpm dev:mobile",
     "dev:mobile": "pnpm --filter mobile dev",
+    "dev:mobile:clear": "pnpm --filter mobile dev:clear",
+    "dev:mobile:web": "pnpm --filter mobile dev:web",
     "dev:admin": "pnpm --filter admin dev",
+    "dev:api": "pnpm --filter api dev",
     "lint": "pnpm -r lint",
     "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r test",
     "format": "prettier --write .",
     "fetch:references": "bash scripts/fetch-open-source-references.sh"
   },
   "devDependencies": {
-    "@typescript-eslint/eslint-plugin": "latest",
-    "@typescript-eslint/parser": "latest",
-    "eslint": "latest",
-    "eslint-config-prettier": "latest",
-    "prettier": "latest",
-    "typescript": "latest"
+    "@typescript-eslint/eslint-plugin": "^8.62.1",
+    "@typescript-eslint/parser": "^8.62.1",
+    "eslint": "^10.6.0",
+    "eslint-config-prettier": "^10.1.8",
+    "prettier": "^3.9.4",
+    "typescript": "~6.0.3",
+    "vitest": "^3.0.0"
   }
 }

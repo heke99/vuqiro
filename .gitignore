@@ -11,4 +11,5 @@ coverage/
 !.env.example
 .DS_Store
 *.log
-references/open-source/*/.git
+references/open-source/*
+!references/open-source/README.md

@@ -5,26 +5,33 @@
   "main": "expo/AppEntry.js",
   "scripts": {
     "dev": "expo start",
+    "dev:clear": "expo start --clear",
+    "dev:web": "expo start --web",
     "ios": "expo start --ios",
     "android": "expo start --android",
     "web": "expo start --web",
     "lint": "eslint . --ext .ts,.tsx",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
-    "@expo/vector-icons": "latest",
+    "@expo/metro-runtime": "~57.0.2",
+    "@expo/vector-icons": "^15.1.1",
     "@vuqiro/mock-data": "workspace:*",
     "@vuqiro/types": "workspace:*",
     "@vuqiro/ui": "workspace:*",
-    "expo": "latest",
-    "expo-linear-gradient": "latest",
-    "expo-status-bar": "latest",
-    "react": "latest",
-    "react-native": "latest",
-    "react-native-safe-area-context": "latest"
+    "expo": "~57.0.1",
+    "expo-linear-gradient": "~57.0.0",
+    "expo-status-bar": "~57.0.0",
+    "react": "19.2.7",
+    "react-dom": "19.2.3",
+    "react-native": "0.86.0",
+    "react-native-safe-area-context": "~5.8.0",
+    "react-native-web": "^0.21.2"
   },
   "devDependencies": {
-    "@types/react": "latest",
-    "typescript": "latest"
+    "@types/react": "~19.2.0",
+    "typescript": "~6.0.3",
+    "vitest": "^3.0.0"
   }
 }

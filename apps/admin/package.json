@@ -7,20 +7,22 @@
     "build": "next build",
     "start": "next start -p 3001",
     "lint": "eslint . --ext .ts,.tsx",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
     "@vuqiro/mock-data": "workspace:*",
     "@vuqiro/types": "workspace:*",
     "@vuqiro/ui": "workspace:*",
-    "next": "latest",
-    "react": "latest",
-    "react-dom": "latest"
+    "next": "^16.2.10",
+    "react": "19.2.7",
+    "react-dom": "19.2.3"
   },
   "devDependencies": {
-    "@types/node": "latest",
-    "@types/react": "latest",
-    "@types/react-dom": "latest",
-    "typescript": "latest"
+    "@types/node": "^22.0.0",
+    "@types/react": "~19.2.0",
+    "@types/react-dom": "~19.2.0",
+    "typescript": "~6.0.3",
+    "vitest": "^3.0.0"
   }
 }

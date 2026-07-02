@@ -1,5 +1,5 @@
 {
-  "name": "@vuqiro/mock-data",
+  "name": "@vuqiro/config",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -9,9 +9,6 @@
     "lint": "eslint src --ext .ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run --passWithNoTests"
-  },
-  "dependencies": {
-    "@vuqiro/types": "workspace:*"
   },
   "devDependencies": {
     "typescript": "~6.0.3",
