@@ -52,10 +52,12 @@ export function SettingsScreen() {
         <Text style={styles.link}>Blocked accounts</Text>
         <Text style={styles.supportEmail}>{blockedCount}</Text>
       </Card>
-      <Card style={styles.row}>
-        <Text style={styles.link}>Notification preferences</Text>
-        <Text style={styles.chevron}>›</Text>
-      </Card>
+      <Pressable onPress={() => router.push("/notification-preferences")}>
+        <Card style={styles.row}>
+          <Text style={styles.link}>Notification preferences</Text>
+          <Text style={styles.chevron}>›</Text>
+        </Card>
+      </Pressable>
 
       <Text style={styles.sectionTitle}>Purchases</Text>
       <Pressable

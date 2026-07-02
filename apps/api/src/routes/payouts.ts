@@ -4,6 +4,7 @@ import { getPayoutsProvider } from "@vuqiro/services";
 import { loadEnv } from "@vuqiro/config";
 import { writeAuditLog } from "../lib/audit";
 import { badRequest, forbidden } from "../lib/errors";
+import { notifyCreatorProfile } from "../lib/notify";
 import { enforceRateLimit } from "../lib/rateLimit";
 import { getServiceDb, isBackendConfigured } from "../lib/supabase";
 import type { AppEnv } from "../middleware/auth";
@@ -263,6 +264,16 @@ payoutRoutes.post("/admin/payouts/batch", requireAdmin("platform_superadmin", "f
         .update({ status: "paid", payout_id: payout.id })
         .in("id", bucket.entryIds);
     }
+
+    // Payout status notifications go only to the owning creator.
+    await notifyCreatorProfile(creatorId, {
+      type: "payout_status",
+      title: "Payout update",
+      body:
+        transfer.status === "failed"
+          ? `Your payout of $${amount.toFixed(2)} failed: ${transfer.errorMessage ?? "unknown error"}. We'll retry after you update your account.`
+          : `Your payout of $${amount.toFixed(2)} is ${transfer.status === "paid" ? "on its way" : "processing"}.`
+    });
   }
 
   await writeAuditLog(admin, {

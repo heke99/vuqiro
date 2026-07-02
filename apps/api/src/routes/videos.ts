@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { z } from "zod";
 import { mockComments, mockVideos } from "@vuqiro/mock-data";
 import { badRequest, notFound } from "../lib/errors";
+import { notifyProfile } from "../lib/notify";
 import { enforceRateLimit } from "../lib/rateLimit";
 import { getServiceDb, isBackendConfigured } from "../lib/supabase";
 import type { AppEnv } from "../middleware/auth";
@@ -189,5 +190,26 @@ videoRoutes.post("/:id/comments", requireUser, async (c) => {
     .select("id, video_id, author_id, text, created_at")
     .single();
   if (error) throw badRequest(error.message);
+
+  // Notify the video's creator (unless they commented on their own video).
+  const { data: video } = await db.from("videos").select("creator_id, caption").eq("id", id).maybeSingle();
+  if (video) {
+    const { data: creator } = await db
+      .from("creators")
+      .select("profile_id")
+      .eq("id", video.creator_id)
+      .maybeSingle();
+    if (creator && creator.profile_id !== profile.id) {
+      await notifyProfile({
+        profileId: creator.profile_id,
+        type: "new_comment",
+        title: "New comment",
+        body: `@${profile.handle} commented: \u201c${body.text.slice(0, 80)}\u201d`,
+        relatedProfileId: profile.id,
+        relatedVideoId: id
+      });
+    }
+  }
+
   return c.json({ comment: data, source: "db" }, 201);
 });

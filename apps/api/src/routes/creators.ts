@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { z } from "zod";
 import { mockCreators } from "@vuqiro/mock-data";
 import { badRequest, notFound } from "../lib/errors";
+import { notifyCreatorProfile } from "../lib/notify";
 import { enforceRateLimit } from "../lib/rateLimit";
 import { getServiceDb, isBackendConfigured } from "../lib/supabase";
 import type { AppEnv } from "../middleware/auth";
@@ -74,5 +75,13 @@ creatorRoutes.post("/:id/follow", requireUser, async (c) => {
 
   const { error } = await db.from("follows").insert({ follower_id: profile.id, creator_id: id });
   if (error) throw badRequest(error.message);
+
+  await notifyCreatorProfile(id, {
+    type: "new_follower",
+    title: "New follower",
+    body: `@${profile.handle} started following you.`,
+    relatedProfileId: profile.id
+  });
+
   return c.json({ following: true, source: "db" });
 });

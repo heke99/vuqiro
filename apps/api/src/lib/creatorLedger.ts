@@ -61,28 +61,11 @@ export async function notifyCreator(params: {
   body: string;
   relatedVideoId?: string;
 }): Promise<void> {
-  const db = getServiceDb();
-  if (!db) return;
-  const { data: creator } = await db
-    .from("creators")
-    .select("profile_id")
-    .eq("id", params.creatorId)
-    .maybeSingle();
-  if (!creator) return;
-
-  // Respect notification preferences (purchases toggle).
-  const { data: prefs } = await db
-    .from("notification_preferences")
-    .select("purchases")
-    .eq("profile_id", creator.profile_id)
-    .maybeSingle();
-  if (prefs && prefs.purchases === false) return;
-
-  await db.from("notifications").insert({
-    profile_id: creator.profile_id,
+  const { notifyCreatorProfile } = await import("./notify");
+  await notifyCreatorProfile(params.creatorId, {
     type: params.type,
     title: params.title,
     body: params.body,
-    related_video_id: params.relatedVideoId ?? null
+    relatedVideoId: params.relatedVideoId
   });
 }

@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { z } from "zod";
 import { writeAuditLog } from "../lib/audit";
 import { badRequest, notFound } from "../lib/errors";
+import { notifyProfile } from "../lib/notify";
 import { getServiceDb, isBackendConfigured } from "../lib/supabase";
 import type { ApiAdmin, AppEnv } from "../middleware/auth";
 import { requireAdmin } from "../middleware/auth";
@@ -157,6 +158,26 @@ async function enforceDecision(
   return "no_action";
 }
 
+/** Resolves the profile that owns a case's target (for notifications). */
+async function resolveTargetOwner(caseRow: CaseRow): Promise<string | null> {
+  const db = getServiceDb()!;
+  if (caseRow.target_type === "profile") return caseRow.target_id;
+  if (caseRow.target_type === "creator") {
+    const { data } = await db.from("creators").select("profile_id").eq("id", caseRow.target_id).maybeSingle();
+    return data?.profile_id ?? null;
+  }
+  if (caseRow.target_type === "comment") {
+    const { data } = await db.from("comments").select("author_id").eq("id", caseRow.target_id).maybeSingle();
+    return data?.author_id ?? null;
+  }
+  const { data } = await db
+    .from("videos")
+    .select("creators (profile_id)")
+    .eq("id", caseRow.target_id)
+    .maybeSingle();
+  return (data?.creators as { profile_id?: string } | null)?.profile_id ?? null;
+}
+
 adminModerationRoutes.get("/moderation/cases/:id", async (c) => {
   const id = z.string().min(1).parse(c.req.param("id"));
 
@@ -207,6 +228,19 @@ adminModerationRoutes.post("/moderation/cases/:id/decide", requireAdmin("platfor
   }
 
   const summary = await enforceDecision(admin, caseRow as CaseRow, body.action, body.note);
+
+  // Tell the affected user what happened (moderation_warning channel).
+  if (body.action !== "no_action") {
+    const ownerProfileId = await resolveTargetOwner(caseRow as CaseRow);
+    if (ownerProfileId) {
+      await notifyProfile({
+        profileId: ownerProfileId,
+        type: "moderation_warning",
+        title: "Moderation update",
+        body: `A moderation decision (${body.action.replaceAll("_", " ")}) was applied to your ${caseRow.target_type}. You can appeal from the creator studio.`
+      });
+    }
+  }
 
   await db.from("moderation_actions").insert({
     case_id: id,

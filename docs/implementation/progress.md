@@ -1,6 +1,6 @@
 # Vuqiro Implementation Progress
 
-Current batch: Batch 17 — Notifications
+Current batch: Batch 18 — Fraud, abuse and safety hardening
 
 Completed batches:
 
@@ -20,10 +20,10 @@ Completed batches:
 - Batch 14 — Wallet, coins, unlocks, tips and boosts (docs/implementation/batch-014-wallet-economy.md)
 - Batch 15 — Stripe Connect creator payouts (docs/implementation/batch-015-stripe-payouts.md)
 - Batch 16 — Creator studio (docs/implementation/batch-016-creator-studio.md)
+- Batch 17 — Notifications (docs/implementation/batch-017-notifications.md)
 
 Remaining batches:
 
-- Batch 17 — Notifications
 - Batch 18 — Fraud, abuse and safety hardening
 - Batch 19 — Legal, privacy and compliance
 - Batch 20 — App Store and Google Play readiness
@@ -49,4 +49,4 @@ Commands run:
 - pnpm dev:api (/health check)
 - bash scripts/validate-migrations.sh (37 tables, all RLS-enabled)
 
-Next action: Batch 17 — notification system with inbox, preferences and push scaffold.
+Next action: Batch 18 — abuse-fraud doc, signals, payout-hold triggers, safety dashboard data.

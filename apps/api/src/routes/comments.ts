@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { z } from "zod";
 import { badRequest, notFound } from "../lib/errors";
+import { notifyProfile } from "../lib/notify";
 import { enforceRateLimit } from "../lib/rateLimit";
 import { getServiceDb, isBackendConfigured } from "../lib/supabase";
 import type { AppEnv } from "../middleware/auth";
@@ -30,7 +31,7 @@ commentRoutes.post("/:id/replies", requireUser, async (c) => {
   const db = getServiceDb()!;
   const { data: parent } = await db
     .from("comments")
-    .select("id, video_id")
+    .select("id, video_id, author_id")
     .eq("id", parentId)
     .maybeSingle();
   if (!parent) throw notFound("Comment not found");
@@ -48,6 +49,18 @@ commentRoutes.post("/:id/replies", requireUser, async (c) => {
     .select("id", { count: "exact", head: true })
     .eq("parent_comment_id", parentId);
   await db.from("comments").update({ reply_count: count ?? 0 }).eq("id", parentId);
+
+  // Notify the parent comment's author (not for self-replies).
+  if (parent.author_id !== profile.id) {
+    await notifyProfile({
+      profileId: parent.author_id,
+      type: "comment_reply",
+      title: "Reply to your comment",
+      body: `@${profile.handle} replied: \u201c${body.text.slice(0, 80)}\u201d`,
+      relatedProfileId: profile.id,
+      relatedVideoId: parent.video_id
+    });
+  }
 
   return c.json({ comment: data, source: "db" }, 201);
 });

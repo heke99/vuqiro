@@ -1,8 +1,9 @@
 import { Ionicons } from "@expo/vector-icons";
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { mockNotifications } from "@vuqiro/mock-data";
 import type { AppNotification, NotificationType } from "@vuqiro/types";
+import { apiFetch, isApiConfigured } from "../../services/api/client";
 import { Card } from "../../components/Card";
 import { Screen } from "../../components/Screen";
 import { colors, spacing } from "../../design/theme";
@@ -26,8 +27,40 @@ export function InboxScreen() {
   const [items, setItems] = useState<AppNotification[]>(mockNotifications);
   const unread = items.filter((item) => !item.isRead).length;
 
+  useEffect(() => {
+    if (!isApiConfigured()) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const response = await apiFetch<{ notifications: AppNotification[]; source: string }>("/notifications");
+        if (!cancelled && response.source === "db") {
+          setItems(response.notifications);
+        }
+      } catch {
+        // stay on mock data
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const markAllRead = () => {
     setItems((current) => current.map((item) => ({ ...item, isRead: true })));
+    if (isApiConfigured()) {
+      apiFetch("/notifications/read", { method: "POST", body: JSON.stringify({ all: true }) }).catch(() => {});
+    }
+  };
+
+  const markRead = (id: string) => {
+    setItems((current) =>
+      current.map((candidate) => (candidate.id === id ? { ...candidate, isRead: true } : candidate))
+    );
+    if (isApiConfigured()) {
+      apiFetch("/notifications/read", { method: "POST", body: JSON.stringify({ notificationId: id }) }).catch(
+        () => {}
+      );
+    }
   };
 
   return (
@@ -47,16 +80,7 @@ export function InboxScreen() {
         {unread > 0 ? `${unread} unread notification${unread === 1 ? "" : "s"}` : "You're all caught up"}
       </Text>
       {items.map((item) => (
-        <Pressable
-          key={item.id}
-          onPress={() =>
-            setItems((current) =>
-              current.map((candidate) =>
-                candidate.id === item.id ? { ...candidate, isRead: true } : candidate
-              )
-            )
-          }
-        >
+        <Pressable key={item.id} onPress={() => markRead(item.id)}>
           <Card style={[styles.row, !item.isRead && styles.rowUnread]}>
             <View style={styles.iconWrap}>
               <Ionicons name={iconForType[item.type]} size={20} color={item.isRead ? colors.textMuted : colors.secondary} />
