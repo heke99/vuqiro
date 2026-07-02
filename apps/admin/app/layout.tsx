@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
-import { mockAdminIdentity } from "@vuqiro/mock-data";
 import { AdminNav } from "../components/AdminNav";
+import { AdminSignIn } from "../components/AdminSignIn";
+import { getAdminIdentity } from "../lib/adminAuth";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -8,7 +9,19 @@ export const metadata: Metadata = {
   description: "Superadmin console for Vuqiro by Diversa Solutions LLC"
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  const identity = await getAdminIdentity();
+
+  if (!identity) {
+    return (
+      <html lang="en">
+        <body>
+          <AdminSignIn />
+        </body>
+      </html>
+    );
+  }
+
   return (
     <html lang="en">
       <body>
@@ -24,12 +37,18 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <AdminNav />
           </aside>
           <main>
+            {identity.mode === "mock" ? (
+              <div className="mode-banner">
+                Mock mode — Supabase env not configured. Sign-in and RBAC activate automatically when
+                NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY are set.
+              </div>
+            ) : null}
             <div className="topbar">
               <div className="topbar-identity">
-                <div className="topbar-avatar">S</div>
+                <div className="topbar-avatar">{identity.admin.displayName.slice(0, 1).toUpperCase()}</div>
                 <div>
-                  <div className="topbar-name">Logged in as: {mockAdminIdentity.displayName}</div>
-                  <div className="topbar-role">Role: {mockAdminIdentity.role}</div>
+                  <div className="topbar-name">Logged in as: {identity.admin.displayName}</div>
+                  <div className="topbar-role">Role: {identity.admin.role}</div>
                 </div>
               </div>
               <div className="topbar-meta">

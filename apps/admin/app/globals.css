@@ -72,5 +72,7 @@ h1 { font-size: 38px; letter-spacing: -0.04em; margin: 5px 0; }
 .button.success { background: var(--success); color: #052712; }
 .header-actions { display: flex; gap: 8px; }
 .flash { position: fixed; bottom: 24px; right: 24px; background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 14px 18px; font-weight: 800; box-shadow: 0 12px 40px rgba(0,0,0,0.5); z-index: 50; }
+.input { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; color: var(--text); padding: 12px 14px; font-size: 15px; width: 100%; }
+.mode-banner { background: rgba(245,158,11,0.12); color: var(--warning); font-size: 12px; font-weight: 800; padding: 8px 30px; border-bottom: 1px solid var(--border); }
 .two-col { display: grid; grid-template-columns: 2fr 1fr; gap: 16px; align-items: start; }
 @media (max-width: 980px) { .shell { grid-template-columns: 1fr; } .sidebar { position: static; height: auto; } .grid, .grid-3, .two-col { grid-template-columns: 1fr; } }

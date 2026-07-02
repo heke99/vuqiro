@@ -3,12 +3,49 @@ import React, { useState } from "react";
 import { StyleSheet, Text, TextInput, View } from "react-native";
 import { Button } from "../../src/components/Button";
 import { Screen } from "../../src/components/Screen";
+import { useAuth } from "../../src/features/auth/AuthContext";
 import { colors, radii, spacing } from "../../src/design/theme";
 
 export default function SignInScreen() {
   const router = useRouter();
+  const auth = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const submit = async () => {
+    setError(null);
+    setBusy(true);
+    const result = await auth.signIn(email.trim(), password);
+    setBusy(false);
+    if (result.ok) {
+      router.replace("/(tabs)/feed");
+    } else {
+      setError(result.error ?? "Sign in failed");
+    }
+  };
+
+  const magicLink = async () => {
+    setError(null);
+    if (!email.trim()) {
+      setError("Enter your email first");
+      return;
+    }
+    setBusy(true);
+    const result = await auth.signInWithMagicLink(email.trim());
+    setBusy(false);
+    if (result.ok) {
+      if (auth.isRealAuth) {
+        setNotice("Magic link sent. Check your email.");
+      } else {
+        router.replace("/(tabs)/feed");
+      }
+    } else {
+      setError(result.error ?? "Could not send magic link");
+    }
+  };
 
   return (
     <Screen>
@@ -40,17 +77,17 @@ export default function SignInScreen() {
           placeholderTextColor={colors.textMuted}
           secureTextEntry
         />
-        <Button
-          label="Sign in"
-          onPress={() => router.replace("/(tabs)/feed")}
-          style={{ marginTop: spacing.md }}
-        />
-        <Button label="Send magic link instead" variant="ghost" onPress={() => router.replace("/(tabs)/feed")} />
+        {error ? <Text style={styles.error}>{error}</Text> : null}
+        {notice ? <Text style={styles.notice}>{notice}</Text> : null}
+        <Button label={busy ? "Signing in…" : "Sign in"} onPress={submit} style={{ marginTop: spacing.md }} />
+        <Button label="Send magic link instead" variant="ghost" onPress={magicLink} />
       </View>
-      <Text style={styles.note}>
-        Authentication connects to the Vuqiro backend in a later batch. This screen currently signs
-        you into the demo experience.
-      </Text>
+      {!auth.isRealAuth ? (
+        <Text style={styles.note}>
+          Backend not configured — running in demo mode. Set EXPO_PUBLIC_SUPABASE_URL and
+          EXPO_PUBLIC_SUPABASE_ANON_KEY for real authentication.
+        </Text>
+      ) : null}
     </Screen>
   );
 }
@@ -70,5 +107,7 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md,
     fontSize: 16
   },
+  error: { color: colors.danger, fontWeight: "700", marginTop: spacing.sm },
+  notice: { color: colors.success, fontWeight: "700", marginTop: spacing.sm },
   note: { color: colors.textMuted, fontSize: 12, lineHeight: 18, marginTop: spacing.xl }
 });

@@ -1,0 +1,34 @@
+# Supabase CLI configuration for local development.
+# Run `supabase start` (requires Docker), then `supabase db reset` to apply
+# migrations + seed. Without Docker, use scripts/validate-migrations.sh.
+
+project_id = "vuqiro"
+
+[db]
+port = 54322
+major_version = 17
+
+[db.seed]
+enabled = true
+sql_paths = ["./seed/seed.sql"]
+
+[api]
+enabled = true
+port = 54321
+schemas = ["public"]
+extra_search_path = ["public"]
+max_rows = 200
+
+[auth]
+enabled = true
+site_url = "vuqiro://"
+additional_redirect_urls = ["vuqiro://", "http://localhost:3001"]
+enable_signup = true
+
+[auth.email]
+enable_signup = true
+enable_confirmations = false
+
+[studio]
+enabled = true
+port = 54323

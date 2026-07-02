@@ -2,13 +2,15 @@ import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import React from "react";
 import { SafeAreaProvider } from "react-native-safe-area-context";
+import { AuthProvider } from "../src/features/auth/AuthContext";
 import { SocialProvider } from "../src/features/social/SocialContext";
 import { colors } from "../src/design/theme";
 
 export default function RootLayout() {
   return (
     <SafeAreaProvider>
-      <SocialProvider>
+      <AuthProvider>
+        <SocialProvider>
         <StatusBar style="light" />
       <Stack
         screenOptions={{
@@ -33,8 +35,9 @@ export default function RootLayout() {
         <Stack.Screen name="modals/comment-sheet" options={{ presentation: "modal" }} />
         <Stack.Screen name="modals/share-sheet" options={{ presentation: "modal" }} />
         <Stack.Screen name="modals/locked-content" options={{ presentation: "modal" }} />
-        </Stack>
-      </SocialProvider>
+          </Stack>
+        </SocialProvider>
+      </AuthProvider>
     </SafeAreaProvider>
   );
 }

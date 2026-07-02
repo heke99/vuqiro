@@ -6,18 +6,22 @@ import { Badge } from "../../components/Badge";
 import { Button } from "../../components/Button";
 import { Card } from "../../components/Card";
 import { Screen } from "../../components/Screen";
+import { useAuth } from "../auth/AuthContext";
 import { colors, spacing } from "../../design/theme";
 
 export function ProfileScreen() {
   const router = useRouter();
+  const auth = useAuth();
   const onSettings = () => router.push("/settings");
+  const displayName = auth.profile?.displayName ?? "Your profile";
+  const handle = auth.profile?.handle ?? "vuqiro_user";
   return (
     <Screen>
       <View style={styles.header}>
-        <Avatar name="Vuqiro User" size={74} />
+        <Avatar name={displayName} size={74} />
         <View style={{ flex: 1 }}>
-          <Text style={styles.name}>Your profile</Text>
-          <Text style={styles.handle}>@vuqiro_user</Text>
+          <Text style={styles.name}>{displayName}</Text>
+          <Text style={styles.handle}>@{handle}</Text>
         </View>
         <Button label="Settings" variant="ghost" onPress={onSettings} />
       </View>

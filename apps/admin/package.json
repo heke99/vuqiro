@@ -11,6 +11,8 @@
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
+    "@supabase/ssr": "^0.7.0",
+    "@supabase/supabase-js": "^2",
     "@vuqiro/mock-data": "workspace:*",
     "@vuqiro/types": "workspace:*",
     "@vuqiro/ui": "workspace:*",

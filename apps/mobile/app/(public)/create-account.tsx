@@ -3,14 +3,31 @@ import React, { useState } from "react";
 import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { Button } from "../../src/components/Button";
 import { Screen } from "../../src/components/Screen";
+import { useAuth } from "../../src/features/auth/AuthContext";
 import { colors, radii, spacing } from "../../src/design/theme";
 
 export default function CreateAccountScreen() {
   const router = useRouter();
+  const auth = useAuth();
   const [handle, setHandle] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [accepted, setAccepted] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const submit = async () => {
+    if (!accepted) return;
+    setError(null);
+    setBusy(true);
+    const result = await auth.signUp(email.trim(), password, handle.trim());
+    setBusy(false);
+    if (result.ok) {
+      router.replace("/(tabs)/feed");
+    } else {
+      setError(result.error ?? "Could not create account");
+    }
+  };
 
   return (
     <Screen>
@@ -64,13 +81,10 @@ export default function CreateAccountScreen() {
             .
           </Text>
         </Pressable>
+        {error ? <Text style={styles.error}>{error}</Text> : null}
         <Button
-          label={accepted ? "Create account" : "Accept terms to continue"}
-          onPress={() => {
-            if (accepted) {
-              router.replace("/(tabs)/feed");
-            }
-          }}
+          label={busy ? "Creating account…" : accepted ? "Create account" : "Accept terms to continue"}
+          onPress={submit}
           variant={accepted ? "primary" : "ghost"}
           style={{ marginTop: spacing.md }}
         />
@@ -109,5 +123,6 @@ const styles = StyleSheet.create({
   checkmark: { color: colors.white, fontWeight: "900" },
   acceptText: { color: colors.textSoft, flex: 1, lineHeight: 20 },
   link: { color: colors.secondary, fontWeight: "800" },
+  error: { color: colors.danger, fontWeight: "700", marginTop: spacing.sm },
   note: { color: colors.textMuted, fontSize: 12, marginTop: spacing.xl }
 });

@@ -1,6 +1,6 @@
 # Vuqiro Implementation Progress
 
-Current batch: Batch 7 — Supabase backend, auth and database
+Current batch: Batch 8 — API contracts and backend service layer
 
 Completed batches:
 
@@ -10,10 +10,10 @@ Completed batches:
 - Batch 4 — Admin and superadmin foundation (docs/implementation/batch-004-admin-foundation.md)
 - Batch 5 — Video adapter and feed UX (docs/implementation/batch-005-video-feed.md)
 - Batch 6 — Discover, search, comments and social UX (docs/implementation/batch-006-social-ux.md)
+- Batch 7 — Supabase backend, auth and database (docs/implementation/batch-007-supabase-backend.md)
 
 Remaining batches:
 
-- Batch 7 — Supabase backend, auth and database
 - Batch 8 — API contracts and backend service layer
 - Batch 9 — Real video upload and processing
 - Batch 10 — Real feed, social graph and discovery
@@ -33,8 +33,8 @@ Remaining batches:
 
 Known issues:
 
-- Mobile auth is mock-gated until Supabase auth (Batch 7).
-- Supabase migration is a draft without RLS/auth (rebuilt in Batch 7).
+- Real auth requires Supabase env vars; mock mode otherwise (by design).
+- API service is a health-check shell until Batch 8.
 - Provider adapters are contracts + mocks only until Batches 9/13/15.
 - Social actions (follow/like/save) are local mock state until Batch 10.
 
@@ -47,5 +47,6 @@ Commands run:
 - npx expo export --platform web (mobile bundle verification, expo-router entry)
 - pnpm dev:admin (HTTP 200 check)
 - pnpm dev:api (/health check)
+- bash scripts/validate-migrations.sh (37 tables, all RLS-enabled)
 
-Next action: Batch 7 — full Supabase schema with RLS, auth and session provider.
+Next action: Batch 8 — typed API endpoints with validation, RBAC and audit logging.

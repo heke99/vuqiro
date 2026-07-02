@@ -4,6 +4,7 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 import { Button } from "../../components/Button";
 import { Card } from "../../components/Card";
 import { Screen } from "../../components/Screen";
+import { useAuth } from "../auth/AuthContext";
 import { useSocial } from "../social/SocialContext";
 import { colors, spacing } from "../../design/theme";
 
@@ -17,10 +18,11 @@ const legalLinks: { label: string; href: Href }[] = [
 
 export function SettingsScreen() {
   const router = useRouter();
+  const auth = useAuth();
   const { blockedUserIds } = useSocial();
   const blockedCount = blockedUserIds.size;
-  const [deleteRequested, setDeleteRequested] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const deleteRequested = auth.deletionRequested;
 
   return (
     <Screen>
@@ -70,15 +72,27 @@ export function SettingsScreen() {
       </Card>
 
       <Text style={styles.sectionTitle}>Account</Text>
+      {auth.isSignedIn ? (
+        <Pressable
+          onPress={async () => {
+            await auth.signOut();
+            router.replace("/(public)/welcome");
+          }}
+        >
+          <Card style={styles.row}>
+            <Text style={styles.link}>Sign out{auth.profile ? ` (@${auth.profile.handle})` : ""}</Text>
+            <Text style={styles.chevron}>›</Text>
+          </Card>
+        </Pressable>
+      ) : null}
       {deleteRequested ? (
         <Card style={{ gap: spacing.sm }}>
           <Text style={styles.deleteTitle}>Deletion requested</Text>
           <Text style={styles.deleteCopy}>
-            Your account deletion request has been recorded. When the backend is connected, your
-            account and data will be permanently removed within 30 days. You can cancel by
-            contacting support.
+            Your account deletion request has been recorded. Your account and data will be
+            permanently removed within 30 days. You can cancel below or by contacting support.
           </Text>
-          <Button label="Cancel deletion request" variant="ghost" onPress={() => setDeleteRequested(false)} />
+          <Button label="Cancel deletion request" variant="ghost" onPress={() => auth.cancelAccountDeletion()} />
         </Card>
       ) : confirmingDelete ? (
         <Card style={{ gap: spacing.sm }}>
@@ -90,9 +104,9 @@ export function SettingsScreen() {
           <Button
             label="Yes, delete my account"
             variant="danger"
-            onPress={() => {
+            onPress={async () => {
               setConfirmingDelete(false);
-              setDeleteRequested(true);
+              await auth.requestAccountDeletion();
             }}
           />
           <Button label="Keep my account" variant="ghost" onPress={() => setConfirmingDelete(false)} />
