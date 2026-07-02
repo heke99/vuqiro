@@ -1,7 +1,7 @@
 import { AdminPageHeader, AdminStatusBadge, AdminTable } from "@vuqiro/ui/admin";
 import { mockModerationCases, mockReports } from "@vuqiro/mock-data";
 import type { ModerationCase, Report } from "@vuqiro/types";
-import { MockAction } from "../../components/MockAction";
+import { AdminApiAction } from "../../components/AdminApiAction";
 
 export default function ModerationPage() {
   const openCases = mockModerationCases.filter((item) => item.status === "open" || item.status === "reviewing");
@@ -63,18 +63,18 @@ export default function ModerationPage() {
             render: (item) =>
               item.status === "resolved" ? (
                 <div className="actions-cell">
-                  <MockAction label="Reopen" />
+                  <AdminApiAction label="Reopen" path={`/admin/moderation/cases/${item.id}/reopen`} />
                 </div>
               ) : (
                 <div className="actions-cell">
-                  <MockAction label="No action" />
-                  <MockAction label="Limit" />
-                  <MockAction label="Age restrict" />
-                  <MockAction label="Remove" variant="danger" />
-                  <MockAction label="Suspend user" variant="danger" />
-                  <MockAction label="Ban user" variant="danger" />
-                  <MockAction label="Hold payout" variant="danger" />
-                  <MockAction label="Restore" variant="success" />
+                  <AdminApiAction label="No action" path={`/admin/moderation/cases/${item.id}/decide`} body={{ action: "no_action" }} />
+                  <AdminApiAction label="Limit" path={`/admin/moderation/cases/${item.id}/decide`} body={{ action: "limit_distribution" }} />
+                  <AdminApiAction label="Age restrict" path={`/admin/moderation/cases/${item.id}/decide`} body={{ action: "age_restrict" }} />
+                  <AdminApiAction label="Remove" variant="danger" path={`/admin/moderation/cases/${item.id}/decide`} body={{ action: "remove_content" }} />
+                  <AdminApiAction label="Suspend user" variant="danger" path={`/admin/moderation/cases/${item.id}/decide`} body={{ action: "suspend_user" }} />
+                  <AdminApiAction label="Ban user" variant="danger" path={`/admin/moderation/cases/${item.id}/decide`} body={{ action: "ban_user" }} />
+                  <AdminApiAction label="Hold payout" variant="danger" path={`/admin/moderation/cases/${item.id}/decide`} body={{ action: "hold_payout" }} />
+                  <AdminApiAction label="Restore" variant="success" path={`/admin/moderation/cases/${item.id}/decide`} body={{ action: "restore_content" }} />
                 </div>
               )
           }

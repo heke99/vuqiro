@@ -1,6 +1,7 @@
 import { AdminMetricCard, AdminPageHeader, AdminStatusBadge, AdminTable } from "@vuqiro/ui/admin";
 import { mockCreators, mockPayoutHolds, mockPayouts } from "@vuqiro/mock-data";
 import type { CreatorPayout, PayoutHold } from "@vuqiro/types";
+import { AdminApiAction } from "../../../components/AdminApiAction";
 import { MockAction } from "../../../components/MockAction";
 
 export default function PayoutsPage() {
@@ -74,12 +75,17 @@ export default function PayoutsPage() {
             render: (payout) => (
               <div className="actions-cell">
                 {payout.status === "held" ? (
-                  <MockAction label="Release" variant="success" />
+                  <AdminApiAction label="Release" variant="success" path={`/admin/payouts/${payout.id}/release`} />
                 ) : payout.status === "failed" ? (
                   <MockAction label="Retry" variant="primary" />
-                ) : (
-                  <MockAction label="Hold" variant="danger" />
-                )}
+                ) : payout.status !== "paid" ? (
+                  <AdminApiAction
+                    label="Hold"
+                    variant="danger"
+                    path={`/admin/payouts/${payout.id}/hold`}
+                    body={{ reason: "manual_admin_hold" }}
+                  />
+                ) : null}
                 <MockAction label="View ledger" />
               </div>
             )

@@ -4,7 +4,9 @@ import { loadEnv } from "@vuqiro/config";
 import { ApiError } from "./lib/errors";
 import type { AppEnv } from "./middleware/auth";
 import { adminRoutes } from "./routes/admin";
+import { adminModerationRoutes } from "./routes/adminModeration";
 import { analyticsRoutes } from "./routes/analytics";
+import { appealRoutes } from "./routes/appeals";
 import { commentRoutes } from "./routes/comments";
 import { creatorRoutes } from "./routes/creators";
 import { discoveryRoutes } from "./routes/discovery";
@@ -56,6 +58,8 @@ export function createApp() {
   app.route("/wallet", walletRoutes);
   app.route("/monetization", monetizationRoutes);
   app.route("/", webhookRoutes); // POST /revenuecat/webhook, POST /stripe/webhook
+  app.route("/", appealRoutes); // POST /appeals
+  app.route("/admin", adminModerationRoutes); // moderation case detail + decisions
   app.route("/admin", adminRoutes);
 
   return app;

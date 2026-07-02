@@ -1,6 +1,6 @@
 # Vuqiro Implementation Progress
 
-Current batch: Batch 12 — Real moderation and safety
+Current batch: Batch 13 — RevenueCat payments
 
 Completed batches:
 
@@ -15,10 +15,10 @@ Completed batches:
 - Batch 9 — Real video upload and processing (docs/implementation/batch-009-video-pipeline.md)
 - Batch 10 — Real feed, social graph and discovery (docs/implementation/batch-010-real-feed-social.md)
 - Batch 11 — Recommendation engine and analytics (docs/implementation/batch-011-ranking-analytics.md)
+- Batch 12 — Real moderation and safety (docs/implementation/batch-012-moderation.md)
 
 Remaining batches:
 
-- Batch 12 — Real moderation and safety
 - Batch 13 — RevenueCat payments
 - Batch 14 — Wallet, coins, unlocks, tips and boosts
 - Batch 15 — Stripe Connect creator payouts
@@ -49,4 +49,4 @@ Commands run:
 - pnpm dev:api (/health check)
 - bash scripts/validate-migrations.sh (37 tables, all RLS-enabled)
 
-Next action: Batch 12 — moderation decision pipeline, appeals and enforcement.
+Next action: Batch 13 — RevenueCat SDK integration and idempotent webhook processing.
