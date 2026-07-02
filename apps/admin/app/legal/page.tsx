@@ -1,23 +1,63 @@
-export default function Page() {
+import { AdminPageHeader, AdminStatusBadge, AdminTable } from "@vuqiro/ui/admin";
+import { mockLegalAcceptances, mockLegalDocuments } from "@vuqiro/mock-data";
+import type { LegalAcceptance, LegalDocument } from "@vuqiro/types";
+import { MockAction } from "../../components/MockAction";
+
+export default function LegalPage() {
   return (
     <>
-      <div className="header">
-        <div>
-          <div className="kicker">Superadmin</div>
-          <h1>Legal</h1>
-          <p className="copy">Terms, privacy, community guidelines, creator terms, payout terms and acceptance logs.</p>
-        </div>
-        <button className="button ghost">Mock action</button>
+      <AdminPageHeader
+        kicker="Platform"
+        title="Legal documents"
+        copy="Versioned legal documents and user acceptances. Publishing a new version prompts users to re-accept where required. Outlines are not final legal advice; attorney review is required before launch."
+        actions={<MockAction label="New document version" variant="primary" />}
+      />
+      <AdminTable<LegalDocument>
+        columns={[
+          {
+            key: "doc",
+            header: "Document",
+            render: (doc) => (
+              <>
+                <strong>{doc.title}</strong> v{doc.version}
+                <br />
+                {doc.id}
+              </>
+            )
+          },
+          { key: "type", header: "Type", render: (doc) => <AdminStatusBadge status={doc.type} tone="primary" /> },
+          { key: "status", header: "Status", render: (doc) => <AdminStatusBadge status={doc.status} /> },
+          {
+            key: "published",
+            header: "Published",
+            render: (doc) => (doc.publishedAt ? new Date(doc.publishedAt).toLocaleDateString() : "—")
+          },
+          {
+            key: "actions",
+            header: "Actions",
+            render: (doc) => (
+              <div className="actions-cell">
+                {doc.status === "draft" ? <MockAction label="Publish" variant="success" /> : <MockAction label="New version" />}
+                <MockAction label="Preview" />
+              </div>
+            )
+          }
+        ]}
+        rows={mockLegalDocuments}
+      />
+
+      <div className="section-header">
+        <h2>Recent acceptances</h2>
       </div>
-      <div className="grid-3">
-        <div className="card"><div className="metric">Status</div><div className="metric-value">Mock</div></div>
-        <div className="card"><div className="metric">Audit</div><div className="metric-value">On</div></div>
-        <div className="card"><div className="metric">RBAC</div><div className="metric-value">Next</div></div>
-      </div>
-      <div className="card" style={{ marginTop: 18 }}>
-        <h2>Legal foundation</h2>
-        <p className="copy">This section is scaffolded for Batch 1. Backend, real auth, database and role-based actions will be connected in later batches.</p>
-      </div>
+      <AdminTable<LegalAcceptance>
+        columns={[
+          { key: "id", header: "Acceptance", render: (item) => <strong>{item.id}</strong> },
+          { key: "user", header: "User", render: (item) => item.userId },
+          { key: "doc", header: "Document", render: (item) => `${item.documentType} v${item.documentVersion}` },
+          { key: "at", header: "Accepted", render: (item) => new Date(item.acceptedAt).toLocaleString() }
+        ]}
+        rows={mockLegalAcceptances}
+      />
     </>
   );
 }

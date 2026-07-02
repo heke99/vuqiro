@@ -1,24 +1,12 @@
 import type { Metadata } from "next";
-import Link from "next/link";
+import { mockAdminIdentity } from "@vuqiro/mock-data";
+import { AdminNav } from "../components/AdminNav";
 import "./globals.css";
 
 export const metadata: Metadata = {
   title: "Vuqiro Admin",
-  description: "Superadmin foundation for Vuqiro by Diversa Solutions LLC"
+  description: "Superadmin console for Vuqiro by Diversa Solutions LLC"
 };
-
-const nav = [
-  ["/", "Overview"],
-  ["/users", "Users"],
-  ["/creators", "Creators"],
-  ["/videos", "Videos"],
-  ["/moderation", "Moderation"],
-  ["/monetization", "Monetization"],
-  ["/payouts", "Payouts"],
-  ["/legal", "Legal"],
-  ["/audit-log", "Audit log"],
-  ["/settings", "Settings"]
-];
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -33,11 +21,25 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 <div className="logo-sub">Diversa Solutions LLC</div>
               </div>
             </div>
-            <nav className="nav">
-              {nav.map(([href, label]) => <Link href={href} key={href}>{label}</Link>)}
-            </nav>
+            <AdminNav />
           </aside>
-          <main className="main">{children}</main>
+          <main>
+            <div className="topbar">
+              <div className="topbar-identity">
+                <div className="topbar-avatar">S</div>
+                <div>
+                  <div className="topbar-name">Logged in as: {mockAdminIdentity.displayName}</div>
+                  <div className="topbar-role">Role: {mockAdminIdentity.role}</div>
+                </div>
+              </div>
+              <div className="topbar-meta">
+                App: Vuqiro
+                <br />
+                Company: Diversa Solutions LLC
+              </div>
+            </div>
+            <div className="content">{children}</div>
+          </main>
         </div>
       </body>
     </html>

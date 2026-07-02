@@ -1,54 +1,44 @@
-import { mockPackageVersions, mockStoreProducts } from "@vuqiro/mock-data";
+import Link from "next/link";
+import { AdminMetricCard, AdminPageHeader } from "@vuqiro/ui/admin";
+import { mockAdminMetrics, mockPackages, mockPackageVersions, mockPayouts, mockStoreProducts } from "@vuqiro/mock-data";
 
-export default function MonetizationPage() {
+export default function MonetizationOverviewPage() {
+  const liveProducts = mockStoreProducts.filter((product) => product.status === "configured" || product.status === "live").length;
+  const heldPayouts = mockPayouts.filter((payout) => payout.status === "held").length;
+
   return (
     <>
-      <div className="header">
-        <div>
-          <div className="kicker">Monetization</div>
-          <h1>Packages, pricing and store mapping</h1>
-          <p className="copy">Superadmin can create global package versions, map Apple/Google/RevenueCat products, configure creator share and control publication status. Mobile checkout prices must come from the stores/RevenueCat.</p>
-        </div>
-        <button className="button">Create draft version</button>
+      <AdminPageHeader
+        kicker="Monetization"
+        title="Monetization overview"
+        copy="Packages, price versions, store product mappings, RevenueCat sync and creator payouts. Store prices always come from Apple/Google via RevenueCat; the database is the mapping and versioning source of truth."
+      />
+      <div className="grid">
+        <AdminMetricCard label="Published packages" value={mockPackages.filter((pkg) => pkg.status === "published").length} hint={`${mockPackages.length} total`} />
+        <AdminMetricCard label="Price versions" value={mockPackageVersions.length} />
+        <AdminMetricCard label="Store products configured" value={liveProducts} hint={`${mockStoreProducts.length} mappings`} />
+        <AdminMetricCard label="Coin revenue" value={`$${mockAdminMetrics.coinRevenue.toLocaleString()}`} />
+        <AdminMetricCard label="MRR" value={`$${mockAdminMetrics.mrr.toLocaleString()}`} />
+        <AdminMetricCard label="Pending payouts" value={`$${mockAdminMetrics.pendingPayouts.toLocaleString()}`} />
+        <AdminMetricCard label="Held payouts" value={heldPayouts} hint="See payout controls" />
+        <AdminMetricCard label="Refunds / chargebacks" value={`${mockAdminMetrics.refunds} / ${mockAdminMetrics.chargebacks}`} />
       </div>
-      <div className="grid-3">
-        <div className="card"><div className="metric">Creator tiers</div><div className="metric-value">3</div></div>
-        <div className="card"><div className="metric">Coin packs</div><div className="metric-value">4</div></div>
-        <div className="card"><div className="metric">Store mappings</div><div className="metric-value">{mockStoreProducts.length}</div></div>
+      <div className="section-header">
+        <h2>Manage</h2>
       </div>
-      <div className="card" style={{ marginTop: 18 }}>
-        <div className="row"><h2>Price versions</h2><span className="badge warning">Draft changes create new versions</span></div>
-        <table className="table">
-          <thead><tr><th>Package</th><th>Price</th><th>Billing</th><th>Creator share</th><th>Status</th></tr></thead>
-          <tbody>
-            {mockPackageVersions.map((version) => (
-              <tr key={version.id}>
-                <td><strong>{version.displayName}</strong><br />{version.description}</td>
-                <td>{version.currency} {version.priceAmount}</td>
-                <td>{version.billingPeriod}</td>
-                <td>{version.creatorSharePercent}%</td>
-                <td><span className="badge secondary">{version.status}</span></td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-      <div className="card" style={{ marginTop: 18 }}>
-        <div className="row"><h2>Store products</h2><button className="button ghost">Add store product</button></div>
-        <table className="table">
-          <thead><tr><th>Platform</th><th>Product ID</th><th>RevenueCat Offering</th><th>Entitlement</th><th>Status</th></tr></thead>
-          <tbody>
-            {mockStoreProducts.map((product) => (
-              <tr key={product.id}>
-                <td>{product.platform}</td>
-                <td><strong>{product.storeProductId}</strong></td>
-                <td>{product.revenueCatOfferingId ?? "—"}</td>
-                <td>{product.revenueCatEntitlementId ?? "—"}</td>
-                <td><span className={product.status === "missing" ? "badge danger" : "badge secondary"}>{product.status}</span></td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      <div className="grid">
+        {[
+          ["/monetization/packages", "Packages", "Subscription tiers, coin packs and boosts"],
+          ["/monetization/price-versions", "Price versions", "Versioned pricing with fee splits"],
+          ["/monetization/store-products", "Store products", "Apple / Google product mappings"],
+          ["/monetization/revenuecat", "RevenueCat", "Offerings, entitlements and webhook state"],
+          ["/monetization/payouts", "Payouts", "Creator payout batches, holds and failures"]
+        ].map(([href, title, copy]) => (
+          <Link key={href} href={href} className="card">
+            <div className="card-title">{title}</div>
+            <p className="copy">{copy}</p>
+          </Link>
+        ))}
       </div>
     </>
   );

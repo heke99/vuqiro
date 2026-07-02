@@ -1,23 +1,36 @@
-export default function Page() {
+import { AdminPageHeader, AdminStatusBadge, AdminTable } from "@vuqiro/ui/admin";
+import { mockAuditLogs } from "@vuqiro/mock-data";
+import type { AuditLogEntry } from "@vuqiro/types";
+
+export default function AuditLogPage() {
   return (
     <>
-      <div className="header">
-        <div>
-          <div className="kicker">Superadmin</div>
-          <h1>Audit log</h1>
-          <p className="copy">Every superadmin monetization, moderation and payout action must be logged.</p>
-        </div>
-        <button className="button ghost">Mock action</button>
-      </div>
-      <div className="grid-3">
-        <div className="card"><div className="metric">Status</div><div className="metric-value">Mock</div></div>
-        <div className="card"><div className="metric">Audit</div><div className="metric-value">On</div></div>
-        <div className="card"><div className="metric">RBAC</div><div className="metric-value">Next</div></div>
-      </div>
-      <div className="card" style={{ marginTop: 18 }}>
-        <h2>Audit log foundation</h2>
-        <p className="copy">This section is scaffolded for Batch 1. Backend, real auth, database and role-based actions will be connected in later batches.</p>
-      </div>
+      <AdminPageHeader
+        kicker="Platform"
+        title="Audit log"
+        copy="Immutable record of every superadmin, moderation and payout action. Entries cannot be edited or deleted."
+      />
+      <AdminTable<AuditLogEntry>
+        columns={[
+          { key: "id", header: "Entry", render: (entry) => <strong>{entry.id}</strong> },
+          { key: "action", header: "Action", render: (entry) => <AdminStatusBadge status={entry.action} tone="primary" /> },
+          {
+            key: "actor",
+            header: "Actor",
+            render: (entry) => (
+              <>
+                {entry.actorId}
+                <br />
+                {entry.actorRole}
+              </>
+            )
+          },
+          { key: "target", header: "Target", render: (entry) => `${entry.targetType}: ${entry.targetId}` },
+          { key: "summary", header: "Summary", render: (entry) => entry.summary },
+          { key: "created", header: "When", render: (entry) => new Date(entry.createdAt).toLocaleString() }
+        ]}
+        rows={[...mockAuditLogs].sort((a, b) => b.createdAt.localeCompare(a.createdAt))}
+      />
     </>
   );
 }
