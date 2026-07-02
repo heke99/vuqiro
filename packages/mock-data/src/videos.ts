@@ -41,6 +41,15 @@ const seeds: VideoSeed[] = [
   ["video_025", "creator_008", "Subscriber-only lookbook: spring drop.", ["fashion", "lookbook", "exclusive"], "Fashion", "subscribers_only", 4800, 39000, 94, { requiredTier: "support", isPremium: true }]
 ];
 
+/** Public sample streams for development playback (no credentials needed). */
+const sampleStreams = [
+  "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerFun.mp4",
+  "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyrides.mp4",
+  "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4",
+  "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4",
+  "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerMeltdowns.mp4"
+];
+
 export const mockVideos: Video[] = seeds.map(
   ([id, creatorId, caption, hashtags, category, visibility, likeCount, watchCount, safetyScore, extras], index) => ({
     id,
@@ -60,6 +69,7 @@ export const mockVideos: Video[] = seeds.map(
     revenue: extras?.isPremium ? Math.round(watchCount / 200) : 0,
     isPremium: false,
     safetyScore,
+    playbackUrl: visibility === "public" ? sampleStreams[index % sampleStreams.length] : undefined,
     durationSeconds: 24 + ((index * 7) % 36),
     createdAt: new Date(Date.UTC(2026, 5, 1 + index, 12)).toISOString(),
     ...extras

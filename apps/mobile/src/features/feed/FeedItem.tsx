@@ -1,0 +1,240 @@
+import { Ionicons } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
+import React, { useRef, useState } from "react";
+import { Pressable, StyleSheet, Text, View } from "react-native";
+import type { Creator, Video } from "@vuqiro/types";
+import { Avatar } from "../../components/Avatar";
+import { Badge } from "../../components/Badge";
+import { Button } from "../../components/Button";
+import { VideoActionButton } from "../../components/VideoActionButton";
+import { colors, spacing } from "../../design/theme";
+import { VideoPlayer } from "../video/VideoPlayer";
+import { trackEvent } from "../video/videoEvents";
+import type { FeedItemState } from "../video/videoTypes";
+
+export function deriveFeedItemState(video: Video): FeedItemState {
+  if (video.moderationStatus === "removed") return "removed";
+  if (video.moderationStatus === "blocked") return "blocked";
+  if (video.moderationStatus === "under_review" || video.status === "under_review") return "under_review";
+  if (video.moderationStatus === "age_restricted") return "age_restricted";
+  if (video.visibility === "unlock_with_coins") return "unlock_with_coins";
+  if (video.visibility === "subscribers_only") return "subscriber_only";
+  if (video.visibility === "premium_tier_only" || video.isPremium) return "premium";
+  return "public";
+}
+
+function formatCount(value: number): string {
+  if (value >= 1000000) return `${(value / 1000000).toFixed(1)}M`;
+  if (value >= 1000) return `${(value / 1000).toFixed(1)}k`;
+  return `${value}`;
+}
+
+export function FeedItem({
+  video,
+  creator,
+  height,
+  isActive
+}: {
+  video: Video;
+  creator: Creator;
+  height: number;
+  isActive: boolean;
+}) {
+  const router = useRouter();
+  const [liked, setLiked] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [ageConfirmed, setAgeConfirmed] = useState(false);
+  const lastProgressBucket = useRef(-1);
+
+  const state = deriveFeedItemState(video);
+  const locked = state === "subscriber_only" || state === "unlock_with_coins" || state === "premium";
+  const hidden = state === "removed" || state === "blocked" || state === "under_review";
+  const needsAgeGate = state === "age_restricted" && !ageConfirmed;
+  const canPlay = isActive && !locked && !hidden && !needsAgeGate;
+
+  const toggleLike = () => {
+    setLiked((value) => {
+      if (!value) trackEvent("video_like", { videoId: video.id, creatorId: creator.id });
+      return !value;
+    });
+  };
+
+  const toggleSave = () => {
+    setSaved((value) => {
+      if (!value) trackEvent("video_save", { videoId: video.id, creatorId: creator.id });
+      return !value;
+    });
+  };
+
+  return (
+    <View style={[styles.container, { height }]}>
+      <VideoPlayer
+        playbackUrl={locked || hidden ? undefined : video.playbackUrl}
+        thumbnailUrl={video.thumbnailUrl}
+        isActive={canPlay}
+        loop
+        muted={false}
+        onProgress={(seconds) => {
+          const bucket = Math.floor(seconds / 5);
+          if (bucket !== lastProgressBucket.current) {
+            lastProgressBucket.current = bucket;
+            trackEvent("video_progress", { videoId: video.id, value: seconds });
+          }
+        }}
+        onComplete={() => trackEvent("video_complete", { videoId: video.id })}
+        onError={() => trackEvent("video_pause", { videoId: video.id })}
+      />
+
+      {hidden ? (
+        <View style={styles.stateOverlay}>
+          <Ionicons name="eye-off" size={40} color={colors.textMuted} />
+          <Text style={styles.stateTitle}>
+            {state === "under_review" ? "Under review" : state === "removed" ? "Removed" : "Unavailable"}
+          </Text>
+          <Text style={styles.stateCopy}>
+            {state === "under_review"
+              ? "This video is being reviewed by Vuqiro moderation."
+              : "This video is no longer available."}
+          </Text>
+        </View>
+      ) : null}
+
+      {needsAgeGate ? (
+        <View style={styles.stateOverlay}>
+          <Ionicons name="alert-circle" size={40} color={colors.warning} />
+          <Text style={styles.stateTitle}>Age-restricted</Text>
+          <Text style={styles.stateCopy}>This video may not be suitable for all audiences.</Text>
+          <Button label="I'm 18+, show it" variant="ghost" onPress={() => setAgeConfirmed(true)} />
+        </View>
+      ) : null}
+
+      {locked ? (
+        <Pressable
+          style={styles.stateOverlay}
+          onPress={() => router.push({ pathname: "/modals/locked-content", params: { videoId: video.id } })}
+        >
+          <Ionicons name="lock-closed" size={40} color={colors.secondary} />
+          <Text style={styles.stateTitle}>
+            {state === "unlock_with_coins" ? `Unlock for ${video.coinUnlockPrice} coins` : "Subscribers only"}
+          </Text>
+          <Text style={styles.stateCopy}>
+            {state === "unlock_with_coins"
+              ? "Support this creator and watch instantly."
+              : `Subscribe to ${creator.displayName} to watch.`}
+          </Text>
+        </Pressable>
+      ) : null}
+
+      <View style={styles.actionRail}>
+        <VideoActionButton
+          icon={liked ? "heart" : "heart-outline"}
+          label={formatCount(video.likeCount + (liked ? 1 : 0))}
+          onPress={toggleLike}
+        />
+        <VideoActionButton
+          icon="chatbubble"
+          label={formatCount(video.commentCount)}
+          onPress={() => {
+            trackEvent("video_comment_open", { videoId: video.id });
+            router.push({ pathname: "/modals/comment-sheet", params: { videoId: video.id } });
+          }}
+        />
+        <VideoActionButton
+          icon={saved ? "bookmark" : "bookmark-outline"}
+          label={saved ? "Saved" : "Save"}
+          onPress={toggleSave}
+        />
+        <VideoActionButton
+          icon="arrow-redo"
+          label="Share"
+          onPress={() => {
+            trackEvent("video_share_open", { videoId: video.id });
+            router.push({ pathname: "/modals/share-sheet", params: { videoId: video.id } });
+          }}
+        />
+        <VideoActionButton
+          icon="flag"
+          label="Report"
+          onPress={() => {
+            trackEvent("video_report", { videoId: video.id });
+            router.push({ pathname: "/modals/report", params: { targetType: "video", targetId: video.id } });
+          }}
+        />
+      </View>
+
+      <View style={styles.meta}>
+        <Pressable
+          style={styles.creatorRow}
+          onPress={() => {
+            trackEvent("creator_profile_open", { creatorId: creator.id });
+            router.push(`/creator/${creator.id}`);
+          }}
+        >
+          <Avatar name={creator.displayName} size={42} />
+          <View style={{ flex: 1 }}>
+            <View style={styles.nameRow}>
+              <Text style={styles.creatorName}>{creator.displayName}</Text>
+              {creator.isVerified ? <Ionicons name="checkmark-circle" size={15} color={colors.secondary} /> : null}
+            </View>
+            <Text style={styles.handle}>@{creator.handle}</Text>
+          </View>
+        </Pressable>
+        <Text style={styles.caption}>{video.caption}</Text>
+        <View style={styles.badgeRow}>
+          {video.category ? <Badge label={video.category} tone="secondary" /> : null}
+          {state === "premium" || video.isPremium ? <Badge label="Premium" /> : null}
+          {locked ? <Badge label="Locked" tone="warning" /> : null}
+        </View>
+        <Text style={styles.hashtags}>{video.hashtags.map((tag) => `#${tag}`).join("  ")}</Text>
+        <View style={styles.ctaRow}>
+          <Button
+            label="Support creator"
+            onPress={() => {
+              trackEvent("coin_support_open", { creatorId: creator.id });
+              router.push({ pathname: "/modals/coins", params: { creatorId: creator.id } });
+            }}
+            style={{ flex: 1 }}
+          />
+          <Button
+            label="Subscribe"
+            variant="ghost"
+            onPress={() => {
+              trackEvent("creator_subscribe_open", { creatorId: creator.id });
+              router.push({ pathname: "/modals/subscribe", params: { creatorId: creator.id } });
+            }}
+            style={{ flex: 1 }}
+          />
+        </View>
+      </View>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { width: "100%", backgroundColor: colors.background, justifyContent: "flex-end", overflow: "hidden" },
+  stateOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "rgba(5,5,8,0.72)",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing.sm,
+    padding: spacing.xl,
+    zIndex: 2
+  },
+  stateTitle: { color: colors.text, fontSize: 22, fontWeight: "900", textAlign: "center" },
+  stateCopy: { color: colors.textSoft, textAlign: "center", lineHeight: 20, maxWidth: 280 },
+  actionRail: { position: "absolute", right: spacing.md, bottom: 210, gap: spacing.md, zIndex: 3 },
+  meta: { padding: spacing.lg, paddingRight: 86, paddingBottom: 28, gap: spacing.sm, zIndex: 3 },
+  creatorRow: { flexDirection: "row", alignItems: "center", gap: spacing.md },
+  nameRow: { flexDirection: "row", alignItems: "center", gap: 4 },
+  creatorName: { color: colors.text, fontSize: 16, fontWeight: "900" },
+  handle: { color: colors.textMuted, fontSize: 12 },
+  caption: { color: colors.text, fontSize: 16, lineHeight: 22 },
+  badgeRow: { flexDirection: "row", gap: spacing.sm },
+  hashtags: { color: colors.secondary, fontWeight: "800" },
+  ctaRow: { flexDirection: "row", gap: spacing.sm, marginTop: spacing.xs }
+});

@@ -1,8 +1,8 @@
-import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import React from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { mockComments, mockCreators, mockVideos } from "@vuqiro/mock-data";
+import { VideoPlayer } from "./VideoPlayer";
 import { Avatar } from "../../components/Avatar";
 import { Badge } from "../../components/Badge";
 import { Button } from "../../components/Button";
@@ -32,10 +32,7 @@ export function VideoDetailScreen({ videoId }: { videoId: string }) {
         />
       </View>
       <View style={styles.player}>
-        <LinearGradient
-          colors={["#111827", "#4C1D95", "#050507"]}
-          style={StyleSheet.absoluteFill}
-        />
+        <VideoPlayer playbackUrl={isLocked ? undefined : video.playbackUrl} isActive={!isLocked} loop />
         {isLocked ? (
           <View style={styles.lockedOverlay}>
             <Text style={styles.lockedTitle}>Locked content</Text>

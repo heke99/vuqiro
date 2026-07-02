@@ -1,6 +1,6 @@
 # Vuqiro Implementation Progress
 
-Current batch: Batch 5 — Video adapter and feed UX
+Current batch: Batch 6 — Discover, search, comments and social UX
 
 Completed batches:
 
@@ -8,11 +8,10 @@ Completed batches:
 - Batch 2 — Mobile app foundation with Expo Router (docs/implementation/batch-002-mobile-foundation.md)
 - Batch 3 — Shared packages and mock data (docs/implementation/batch-003-shared-packages.md)
 - Batch 4 — Admin and superadmin foundation (docs/implementation/batch-004-admin-foundation.md)
+- Batch 5 — Video adapter and feed UX (docs/implementation/batch-005-video-feed.md)
 
 Remaining batches:
 
-- Batch 4 — Admin and superadmin foundation
-- Batch 5 — Video adapter and feed UX
 - Batch 6 — Discover, search, comments and social UX
 - Batch 7 — Supabase backend, auth and database
 - Batch 8 — API contracts and backend service layer
@@ -37,7 +36,7 @@ Known issues:
 - Mobile auth is mock-gated until Supabase auth (Batch 7).
 - Supabase migration is a draft without RLS/auth (rebuilt in Batch 7).
 - Provider adapters are contracts + mocks only until Batches 9/13/15.
-- Feed uses gradient placeholders until the video adapter (Batch 5).
+- Social actions (follow/like/save) are local mock state until Batch 10.
 
 Commands run:
 
@@ -49,4 +48,4 @@ Commands run:
 - pnpm dev:admin (HTTP 200 check)
 - pnpm dev:api (/health check)
 
-Next action: Batch 5 — video player adapter, mock player, expo-video integration and full feed item UX.
+Next action: Batch 6 — full discover/search, comment interactions and social action flows.
