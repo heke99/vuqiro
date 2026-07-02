@@ -14,6 +14,7 @@ import { creatorStudioRoutes } from "./routes/creatorStudio";
 import { discoveryRoutes } from "./routes/discovery";
 import { eventRoutes } from "./routes/events";
 import { feedRoutes } from "./routes/feed";
+import { legalRoutes } from "./routes/legal";
 import { moderationRoutes } from "./routes/moderation";
 import { monetizationRoutes } from "./routes/monetization";
 import { notificationRoutes } from "./routes/notifications";
@@ -68,6 +69,7 @@ export function createApp() {
   app.route("/", appealRoutes); // POST /appeals
   app.route("/", payoutRoutes); // /payouts/*, POST /admin/payouts/batch
   app.route("/", notificationRoutes); // /notifications, /notifications/read, /notifications/preferences
+  app.route("/", legalRoutes); // /legal/documents, /legal/accept, /legal/acceptances
   app.route("/admin", adminModerationRoutes); // moderation case detail + decisions
   app.route("/admin", adminFraudRoutes); // fraud signals
   app.route("/admin", adminRoutes);

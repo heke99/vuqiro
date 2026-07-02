@@ -1,6 +1,6 @@
 # Vuqiro Implementation Progress
 
-Current batch: Batch 19 — Legal, privacy and compliance
+Current batch: Batch 20 — App Store and Google Play readiness
 
 Completed batches:
 
@@ -22,10 +22,10 @@ Completed batches:
 - Batch 16 — Creator studio (docs/implementation/batch-016-creator-studio.md)
 - Batch 17 — Notifications (docs/implementation/batch-017-notifications.md)
 - Batch 18 — Fraud, abuse and safety hardening (docs/implementation/batch-018-fraud-safety.md)
+- Batch 19 — Legal, privacy and compliance (docs/implementation/batch-019-legal-compliance.md)
 
 Remaining batches:
 
-- Batch 19 — Legal, privacy and compliance
 - Batch 20 — App Store and Google Play readiness
 - Batch 21 — EAS builds and internal testing
 - Batch 22 — Production hardening
@@ -49,4 +49,4 @@ Commands run:
 - pnpm dev:api (/health check)
 - bash scripts/validate-migrations.sh (37 tables, all RLS-enabled)
 
-Next action: Batch 19 — legal docs, in-app acceptances, account deletion verification.
+Next action: Batch 20 — store readiness docs, review notes and app assets.

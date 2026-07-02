@@ -5,6 +5,7 @@ import { loadEnv } from "@vuqiro/config";
 import { writeAuditLog } from "../lib/audit";
 import { badRequest, forbidden } from "../lib/errors";
 import { notifyCreatorProfile } from "../lib/notify";
+import { recordAcceptance } from "./creatorStudio";
 import { enforceRateLimit } from "../lib/rateLimit";
 import { getServiceDb, isBackendConfigured } from "../lib/supabase";
 import type { AppEnv } from "../middleware/auth";
@@ -65,6 +66,10 @@ payoutRoutes.post("/payouts/onboarding", requireUser, async (c) => {
       account = inserted;
     }
   }
+
+  // Starting Stripe onboarding implies acceptance of the payout terms
+  // (the mobile UI links the terms next to the CTA).
+  await recordAcceptance(profile.id, "payout_terms");
 
   const link = await provider.createOnboardingLink(account.provider_account_id!, returnUrl, returnUrl);
   return c.json({ accountId: account.provider_account_id, onboardingUrl: link.url, expiresAt: link.expiresAt, source: "db" }, 201);

@@ -4,6 +4,7 @@ import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { Button } from "../../src/components/Button";
 import { Screen } from "../../src/components/Screen";
 import { useAuth } from "../../src/features/auth/AuthContext";
+import { apiFetch, isApiConfigured } from "../../src/services/api/client";
 import { colors, radii, spacing } from "../../src/design/theme";
 
 export default function CreateAccountScreen() {
@@ -21,6 +22,13 @@ export default function CreateAccountScreen() {
     setError(null);
     setBusy(true);
     const result = await auth.signUp(email.trim(), password, handle.trim());
+    if (result.ok && isApiConfigured()) {
+      // Store the acceptance server-side (terms + privacy + guidelines).
+      apiFetch("/legal/accept", {
+        method: "POST",
+        body: JSON.stringify({ documentTypes: ["terms", "privacy", "community_guidelines"] })
+      }).catch(() => {});
+    }
     setBusy(false);
     if (result.ok) {
       router.replace("/(tabs)/feed");

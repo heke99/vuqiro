@@ -10,6 +10,24 @@ export const creatorStudioRoutes = new Hono<AppEnv>();
 
 creatorStudioRoutes.use("*", attachUser);
 
+/** Records acceptance of the latest published version of a legal document. */
+export async function recordAcceptance(profileId: string, documentType: string): Promise<void> {
+  const db = getServiceDb();
+  if (!db) return;
+  const { data: doc } = await db
+    .from("legal_documents")
+    .select("id")
+    .eq("type", documentType)
+    .eq("status", "published")
+    .order("version", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (!doc) return;
+  await db
+    .from("legal_acceptances")
+    .upsert({ profile_id: profileId, document_id: doc.id }, { onConflict: "profile_id,document_id" });
+}
+
 /**
  * Resolves the calling user's creator record. Every studio endpoint is
  * scoped through this — a creator can never address another creator's data.
@@ -188,6 +206,9 @@ creatorStudioRoutes.post("/creators/onboard", requireUser, async (c) => {
 
   await db.from("creator_profiles").insert({ creator_id: creator.id }).select("creator_id");
   await db.from("profiles").update({ is_creator: true }).eq("id", profile.id);
+
+  // Creator onboarding implies acceptance of the creator terms.
+  await recordAcceptance(profile.id, "creator_terms");
 
   return c.json({ creatorId: creator.id, onboardingStatus: "completed", source: "db" }, 201);
 });
