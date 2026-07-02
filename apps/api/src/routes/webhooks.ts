@@ -66,20 +66,101 @@ webhookRoutes.post("/revenuecat/webhook", async (c) => {
   return c.json({ received: true, result });
 });
 
+type StripeEvent = {
+  id: string;
+  type: string;
+  data: {
+    object: {
+      id: string;
+      payouts_enabled?: boolean;
+      requirements?: { currently_due?: string[]; disabled_reason?: string | null };
+      metadata?: Record<string, string>;
+      destination?: string;
+      amount?: number;
+    };
+  };
+};
+
 /**
- * Stripe webhook. Signature verification + processing is implemented with
- * the payout batch (Batch 15); until then the endpoint refuses unsigned
- * calls so it can be registered safely.
+ * Stripe webhook. Signature-verified (HMAC over `t.rawBody`, replay-window
+ * checked), idempotent on the Stripe event id, then processed:
+ *   account.updated    -> sync creator payout account status
+ *   transfer.reversed  -> mark the payout failed for review
  */
 webhookRoutes.post("/stripe/webhook", async (c) => {
   const env = loadEnv();
   if (!env.stripeWebhookSecret) {
     throw unauthorized("Stripe webhook secret not configured");
   }
-  const signature = c.req.header("stripe-signature");
-  if (!signature) {
-    throw unauthorized("Missing stripe-signature header");
+  const rawBody = await c.req.text();
+  const { StripePayoutsProvider } = await import("@vuqiro/services");
+  const verifier = new StripePayoutsProvider({
+    secretKey: env.stripeSecretKey ?? "unused-for-verification",
+    webhookSecret: env.stripeWebhookSecret
+  });
+  const verification = verifier.verifyWebhookSignature(rawBody, c.req.header("stripe-signature"));
+  if (!verification.valid) {
+    throw unauthorized(verification.reason ?? "Invalid Stripe signature");
   }
-  // Full verification via stripe.webhooks.constructEvent lands in Batch 15.
-  return c.json({ received: true, processed: false, reason: "processing lands in Batch 15" });
+
+  const event = JSON.parse(rawBody) as StripeEvent;
+  if (!event.id || !event.type) {
+    return c.json({ error: "Malformed event" }, 400);
+  }
+
+  if (!isBackendConfigured()) {
+    return c.json({ received: true, processed: false, reason: "backend not configured" });
+  }
+
+  const db = getServiceDb()!;
+  // Idempotency: unique (provider, provider_event_id).
+  const { error: insertError } = await db.from("purchase_events").insert({
+    provider: "stripe",
+    provider_event_id: event.id,
+    event_type: event.type,
+    payload: event
+  });
+  if (insertError) {
+    if (insertError.code === "23505") {
+      return c.json({ received: true, duplicate: true });
+    }
+    return c.json({ error: insertError.message }, 500);
+  }
+
+  switch (event.type) {
+    case "account.updated": {
+      const account = event.data.object;
+      const status = account.payouts_enabled
+        ? "verified"
+        : account.requirements?.disabled_reason
+          ? "restricted"
+          : "onboarding_started";
+      await db
+        .from("creator_payout_accounts")
+        .update({
+          status,
+          payouts_enabled: account.payouts_enabled ?? false,
+          requirements_due: account.requirements?.currently_due ?? []
+        })
+        .eq("provider_account_id", account.id);
+      break;
+    }
+    case "transfer.reversed": {
+      await db
+        .from("creator_payouts")
+        .update({ status: "failed", failure_reason: "Transfer reversed by Stripe" })
+        .eq("provider_transfer_id", event.data.object.id);
+      break;
+    }
+    default:
+      break;
+  }
+
+  await db
+    .from("purchase_events")
+    .update({ processed_at: new Date().toISOString() })
+    .eq("provider", "stripe")
+    .eq("provider_event_id", event.id);
+
+  return c.json({ received: true, type: event.type });
 });

@@ -4,3 +4,6 @@ export * from "./video/muxVideoProvider";
 export * from "./video/getVideoProvider";
 export * from "./payments/paymentsProvider";
 export * from "./payouts/payoutsProvider";
+export * from "./payouts/mockPayoutsProvider";
+export * from "./payouts/stripePayoutsProvider";
+export * from "./payouts/getPayoutsProvider";

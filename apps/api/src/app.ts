@@ -14,6 +14,7 @@ import { eventRoutes } from "./routes/events";
 import { feedRoutes } from "./routes/feed";
 import { moderationRoutes } from "./routes/moderation";
 import { monetizationRoutes } from "./routes/monetization";
+import { payoutRoutes } from "./routes/payouts";
 import { uploadRoutes } from "./routes/uploads";
 import { videoRoutes } from "./routes/videos";
 import { videoWebhookRoutes } from "./routes/videoWebhooks";
@@ -59,6 +60,7 @@ export function createApp() {
   app.route("/monetization", monetizationRoutes);
   app.route("/", webhookRoutes); // POST /revenuecat/webhook, POST /stripe/webhook
   app.route("/", appealRoutes); // POST /appeals
+  app.route("/", payoutRoutes); // /payouts/*, POST /admin/payouts/batch
   app.route("/admin", adminModerationRoutes); // moderation case detail + decisions
   app.route("/admin", adminRoutes);
 
