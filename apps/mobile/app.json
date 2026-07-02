@@ -6,13 +6,7 @@
     "version": "0.1.0",
     "orientation": "portrait",
     "userInterfaceStyle": "dark",
-    "newArchEnabled": true,
     "icon": "./assets/icon.png",
-    "splash": {
-      "image": "./assets/splash.png",
-      "resizeMode": "cover",
-      "backgroundColor": "#07070A"
-    },
     "ios": {
       "bundleIdentifier": "com.diversasolutions.vuqiro",
       "supportsTablet": false,
@@ -29,7 +23,10 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#07070A"
       },
-      "permissions": ["android.permission.READ_MEDIA_VIDEO", "android.permission.RECORD_AUDIO"]
+      "permissions": [
+        "android.permission.READ_MEDIA_VIDEO",
+        "android.permission.RECORD_AUDIO"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -37,6 +34,18 @@
     "extra": {
       "companyName": "Diversa Solutions LLC"
     },
-    "plugins": ["expo-router", "expo-video"]
+    "plugins": [
+      "expo-router",
+      "expo-video",
+      "expo-font",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash.png",
+          "resizeMode": "cover",
+          "backgroundColor": "#07070A"
+        }
+      ]
+    ]
   }
 }

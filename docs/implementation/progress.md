@@ -1,6 +1,6 @@
 # Vuqiro Implementation Progress
 
-Current batch: Batch 21 — EAS builds and internal testing
+Current batch: Batch 22 — Production hardening
 
 Completed batches:
 
@@ -24,10 +24,10 @@ Completed batches:
 - Batch 18 — Fraud, abuse and safety hardening (docs/implementation/batch-018-fraud-safety.md)
 - Batch 19 — Legal, privacy and compliance (docs/implementation/batch-019-legal-compliance.md)
 - Batch 20 — App Store and Google Play readiness (docs/implementation/batch-020-store-readiness.md)
+- Batch 21 — EAS builds and internal testing (docs/implementation/batch-021-eas-builds.md)
 
 Remaining batches:
 
-- Batch 21 — EAS builds and internal testing
 - Batch 22 — Production hardening
 - Batch 23 — Launch checklist
 
@@ -49,4 +49,4 @@ Commands run:
 - pnpm dev:api (/health check)
 - bash scripts/validate-migrations.sh (37 tables, all RLS-enabled)
 
-Next action: Batch 21 — EAS build configuration and validation.
+Next action: Batch 22 — error boundaries, crash reporting scaffold, security review, testing checklists.
