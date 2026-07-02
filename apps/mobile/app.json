@@ -7,22 +7,36 @@
     "orientation": "portrait",
     "userInterfaceStyle": "dark",
     "newArchEnabled": true,
+    "icon": "./assets/icon.png",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "cover",
+      "backgroundColor": "#07070A"
+    },
     "ios": {
       "bundleIdentifier": "com.diversasolutions.vuqiro",
-      "supportsTablet": true
+      "supportsTablet": false,
+      "infoPlist": {
+        "NSPhotoLibraryUsageDescription": "Vuqiro needs access to your photo library so you can select videos to upload.",
+        "NSCameraUsageDescription": "Vuqiro uses the camera to record videos you choose to share.",
+        "NSMicrophoneUsageDescription": "Vuqiro uses the microphone when recording videos with sound.",
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "package": "com.diversasolutions.vuqiro",
       "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#07070A"
-      }
+      },
+      "permissions": ["android.permission.READ_MEDIA_VIDEO", "android.permission.RECORD_AUDIO"]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
     },
     "extra": {
       "companyName": "Diversa Solutions LLC"
     },
-    "plugins": [
-      "expo-router",
-      "expo-video"
-    ]
+    "plugins": ["expo-router", "expo-video"]
   }
 }
