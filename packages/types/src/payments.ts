@@ -63,3 +63,29 @@ export type StoreProduct = {
   revenueCatEntitlementId?: string;
   status: StoreProductStatus;
 };
+
+export type Purchase = {
+  id: string;
+  userId: string;
+  packageVersionId: string;
+  platform: BillingPlatform;
+  storeProductId: string;
+  storeTransactionId?: string;
+  revenueCatEventId?: string;
+  status: PurchaseStatus;
+  priceAmount: number;
+  currency: string;
+  coinsCredited?: number;
+  createdAt: string;
+};
+
+export type PurchaseEvent = {
+  id: string;
+  purchaseId?: string;
+  provider: "revenuecat" | "stripe" | "admin";
+  providerEventId: string;
+  eventType: string;
+  payloadSummary?: string;
+  processedAt?: string;
+  createdAt: string;
+};

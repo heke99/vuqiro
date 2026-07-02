@@ -1,0 +1,83 @@
+import type { Comment } from "@vuqiro/types";
+
+type CommentSeed = [
+  id: string,
+  videoId: string,
+  authorHandle: string,
+  authorDisplayName: string,
+  text: string,
+  likeCount: number,
+  extras?: Partial<Comment>
+];
+
+const seeds: CommentSeed[] = [
+  ["comment_001", "video_001", "riven", "Riven Atlas", "The transition at the end is so clean.", 214, { isCreator: true, replyCount: 2 }],
+  ["comment_002", "video_001", "lenafilms", "Lena Films", "Been waiting for this drop all week.", 96, { isSubscriber: true }],
+  ["comment_003", "video_001", "kofi.codes", "Kofi Codes", "What camera setup is this?", 41, { replyCount: 1 }],
+  ["comment_004", "video_001", "maya", "Maya North", "All handheld, natural light only.", 88, { isCreator: true, parentCommentId: "comment_003" }],
+  ["comment_005", "video_002", "nightdrive", "Night Drive", "Worth every coin. The color grade is unreal.", 33, { isSubscriber: true }],
+  ["comment_006", "video_003", "buildlog", "Build Log", "This is the clearest breakdown I have seen.", 52, { isSubscriber: true }],
+  ["comment_007", "video_004", "midnightsnacker", "Midnight Snacker", "Made these tonight. Ten out of ten.", 187],
+  ["comment_008", "video_004", "chefjules", "Chef Jules", "Pro tip: toast the tortillas in the taco fat.", 240, { replyCount: 1 }],
+  ["comment_009", "video_004", "solacooks", "Sola Cooks", "Chef knows. That is the secret.", 91, { isCreator: true, parentCommentId: "comment_008" }],
+  ["comment_010", "video_005", "wanderbites", "Wander Bites", "Which market is this? Adding it to my list.", 64],
+  ["comment_011", "video_006", "morningmover", "Morning Mover", "Doing this every day this week.", 45, { isSubscriber: true }],
+  ["comment_012", "video_006", "deskbound", "Deskbound Dev", "My shoulders finally forgive me.", 78],
+  ["comment_013", "video_007", "kaimoves", "Kai Moves", "Programming updates drop first for Plus members.", 55, { isCreator: true }],
+  ["comment_014", "video_008", "pixelpaz", "Pixel Paz", "The lighting study here is incredible.", 112],
+  ["comment_015", "video_008", "artdaily", "Art Daily", "Instant save. The glow pass is everything.", 89],
+  ["comment_016", "video_009", "sketchsurge", "Sketch Surge", "50 coins for this is a steal.", 27, { isSubscriber: true }],
+  ["comment_017", "video_010", "vera.codes", "Vera Codes", "Full version on my profile.", 66, { isCreator: true }],
+  ["comment_018", "video_010", "juniordev", "Junior Dev", "This fixed my code review today, thank you.", 143, { replyCount: 1 }],
+  ["comment_019", "video_010", "seniordev", "Senior Dev", "Sending this to my whole team.", 98, { parentCommentId: "comment_018" }],
+  ["comment_020", "video_011", "cloudkat", "Cloud Kat", "Queues explained better than my textbook.", 87],
+  ["comment_021", "video_012", "hiredfast", "Hired Fast", "The premium roadmap got me two offers.", 39, { isSubscriber: true }],
+  ["comment_022", "video_013", "dunestyle", "Dune Style", "Total cost breakdown is in the caption.", 74, { isCreator: true }],
+  ["comment_023", "video_013", "fitfinder", "Fit Finder", "The before and after is wild.", 156],
+  ["comment_024", "video_013", "thriftqueen", "Thrift Queen", "Which thrift store? Asking for research.", 61, { replyCount: 1 }],
+  ["comment_025", "video_014", "streetlens", "Street Lens", "Rule three is controversial but correct.", 83],
+  ["comment_026", "video_015", "indiedev", "Indie Dev", "Thank you for covering small games.", 121, { isSubscriber: true }],
+  ["comment_027", "video_015", "gamefeel", "Game Feel", "Bought it after this video. No regrets.", 95],
+  ["comment_028", "video_016", "framecount", "Frame Count", "That skip at 0:41 is inhuman.", 72],
+  ["comment_029", "video_017", "beatlab", "Beat Lab", "The spoon sample is genius.", 58],
+  ["comment_030", "video_017", "aria.sound", "Aria Sound", "Full stems coming to subscribers soon.", 44, { isCreator: true }],
+  ["comment_031", "video_018", "loyalfan", "Loyal Fan", "This is why the subscription is worth it.", 37, { isSubscriber: true }],
+  ["comment_032", "video_019", "mixdesk", "Mix Desk", "Unlocked it. The de-esser trick alone pays for it.", 29, { isSubscriber: true }],
+  ["comment_033", "video_020", "earlyriser", "Early Riser", "Peaceful. Needed this today.", 102],
+  ["comment_034", "video_020", "ferryfan", "Ferry Fan", "Which route is this ferry?", 31, { replyCount: 1 }],
+  ["comment_035", "video_020", "riven", "Riven Atlas", "Route details in my profile links.", 48, { isCreator: true, parentCommentId: "comment_034" }],
+  ["comment_036", "video_021", "mapmaker", "Map Maker", "Old town walking tours are so underrated.", 55],
+  ["comment_037", "video_022", "dbadmin", "DB Admin", "Pizza-based security models should be standard.", 133],
+  ["comment_038", "video_022", "newgrad", "New Grad", "Finally understand RLS. Thank you.", 76],
+  ["comment_039", "video_023", "primecuts", "Prime Cuts", "The claw grip demo saved my fingers.", 118],
+  ["comment_040", "video_023", "kitchennewb", "Kitchen Newb", "Watched five times. Getting better.", 47],
+  ["comment_041", "video_024", "gymlog", "Gym Log", "Month 3 wall is real. This helps.", 92, { isSubscriber: true }],
+  ["comment_042", "video_024", "balancepro", "Balance Pro", "Form advice at the end is gold.", 67],
+  ["comment_043", "video_025", "frontrow", "Front Row", "The spring drop is stunning.", 41, { isSubscriber: true }],
+  ["comment_044", "video_001", "soundseeker", "Sound Seeker", "The bass line lives in my head now.", 84],
+  ["comment_045", "video_004", "quickmeals", "Quick Meals", "Adding to the weeknight rotation.", 73],
+  ["comment_046", "video_010", "bughunter", "Bug Hunter", "Sharing with my study group.", 38],
+  ["comment_047", "video_013", "vintagevault", "Vintage Vault", "The stitching detail on the collar!", 52],
+  ["comment_048", "video_006", "physiofan", "Physio Fan", "Great for desk workers. Approved.", 59],
+  ["comment_049", "video_008", "colorfield", "Color Field", "That palette is doing heavy lifting.", 71],
+  ["comment_050", "video_015", "screenshotd", "Screenshot D", "The art style alone sold me.", 63]
+];
+
+export const mockComments: Comment[] = seeds.map(
+  ([id, videoId, authorHandle, authorDisplayName, text, likeCount, extras], index) => ({
+    id,
+    videoId,
+    authorId: extras?.isCreator ? `creator_${authorHandle}` : `user_${authorHandle}`,
+    authorHandle,
+    authorDisplayName,
+    isCreator: false,
+    isSubscriber: false,
+    text,
+    likeCount,
+    replyCount: 0,
+    reportCount: index % 17 === 0 ? 1 : 0,
+    moderationStatus: "visible",
+    createdAt: new Date(Date.UTC(2026, 5, 2 + (index % 28), 8 + (index % 12))).toISOString(),
+    ...extras
+  })
+);

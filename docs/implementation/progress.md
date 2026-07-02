@@ -1,15 +1,15 @@
 # Vuqiro Implementation Progress
 
-Current batch: Batch 3 — Shared packages and mock data
+Current batch: Batch 4 — Admin and superadmin foundation
 
 Completed batches:
 
 - Batch 1 — Repository repair and foundation (docs/implementation/batch-001-foundation.md)
 - Batch 2 — Mobile app foundation with Expo Router (docs/implementation/batch-002-mobile-foundation.md)
+- Batch 3 — Shared packages and mock data (docs/implementation/batch-003-shared-packages.md)
 
 Remaining batches:
 
-- Batch 3 — Shared packages and mock data
 - Batch 4 — Admin and superadmin foundation
 - Batch 5 — Video adapter and feed UX
 - Batch 6 — Discover, search, comments and social UX
@@ -36,7 +36,7 @@ Known issues:
 - Mobile auth is mock-gated until Supabase auth (Batch 7).
 - Supabase migration is a draft without RLS/auth (rebuilt in Batch 7).
 - Provider adapters are contracts + mocks only until Batches 9/13/15.
-- Mock data volume is below spec minimums until Batch 3.
+- Admin app still shows Batch-1 scaffold pages for most sections (rebuilt in Batch 4).
 
 Commands run:
 
@@ -48,4 +48,4 @@ Commands run:
 - pnpm dev:admin (HTTP 200 check)
 - pnpm dev:api (/health check)
 
-Next action: Batch 3 — expand shared types to the full domain model and mock data to spec minimums.
+Next action: Batch 4 — build the complete admin/superadmin app shell with all routes, tables and dashboard.

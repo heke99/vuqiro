@@ -1,19 +1,4 @@
-import type { ID } from "./core";
-
-export type Comment = {
-  id: ID;
-  videoId: ID;
-  authorId: ID;
-  authorHandle: string;
-  authorDisplayName: string;
-  isCreator: boolean;
-  isSubscriber: boolean;
-  text: string;
-  likeCount: number;
-  replyCount: number;
-  parentCommentId?: ID;
-  createdAt: string;
-};
+import type { ID } from "./user";
 
 export type NotificationType =
   | "new_follower"
@@ -31,9 +16,24 @@ export type NotificationType =
 
 export type AppNotification = {
   id: ID;
+  userId?: ID;
   type: NotificationType;
   title: string;
   body: string;
   isRead: boolean;
+  relatedUserId?: ID;
+  relatedVideoId?: ID;
   createdAt: string;
+};
+
+export type NotificationPreferences = {
+  userId: ID;
+  followers: boolean;
+  comments: boolean;
+  creatorUpdates: boolean;
+  purchases: boolean;
+  payouts: boolean;
+  moderation: boolean;
+  system: boolean;
+  pushEnabled: boolean;
 };

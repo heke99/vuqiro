@@ -23,18 +23,58 @@ export type ModerationAction =
   | "no_action"
   | "limit_distribution"
   | "remove_content"
+  | "age_restrict"
   | "suspend_user"
   | "ban_user"
   | "hold_payout"
   | "release_payout"
   | "restore_content";
 
+export type ModerationTargetType = "video" | "comment" | "profile" | "creator";
+
+export type ModerationCaseStatus = "open" | "reviewing" | "resolved" | "appealed";
+
+export type ModerationPriority = "low" | "medium" | "high" | "critical";
+
 export type ModerationCase = {
   id: string;
-  targetType: "video" | "comment" | "profile" | "creator";
+  targetType: ModerationTargetType;
   targetId: string;
   reason: ReportReason;
-  status: "open" | "reviewing" | "resolved" | "appealed";
-  priority: "low" | "medium" | "high" | "critical";
+  status: ModerationCaseStatus;
+  priority: ModerationPriority;
+  reportCount?: number;
+  reporterId?: string;
+  assignedTo?: string;
+  resolvedAction?: ModerationAction;
+  resolvedAt?: string;
+  createdAt: string;
+};
+
+export type Report = {
+  id: string;
+  reporterId: string;
+  targetType: ModerationTargetType;
+  targetId: string;
+  reason: ReportReason;
+  details?: string;
+  status: "submitted" | "attached_to_case" | "dismissed";
+  moderationCaseId?: string;
+  createdAt: string;
+};
+
+export type Block = {
+  id: string;
+  blockerId: string;
+  blockedUserId: string;
+  createdAt: string;
+};
+
+export type ModerationDecision = {
+  id: string;
+  caseId: string;
+  action: ModerationAction;
+  actorId: string;
+  note?: string;
   createdAt: string;
 };
