@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { z } from "zod";
-import { mockComments } from "@vuqiro/mock-data";
-import { badRequest } from "../lib/errors";
+import { mockComments, mockVideos } from "@vuqiro/mock-data";
+import { badRequest, notFound } from "../lib/errors";
 import { enforceRateLimit } from "../lib/rateLimit";
 import { getServiceDb, isBackendConfigured } from "../lib/supabase";
 import type { AppEnv } from "../middleware/auth";
@@ -12,6 +12,96 @@ export const videoRoutes = new Hono<AppEnv>();
 videoRoutes.use("*", attachUser);
 
 const idParam = z.string().min(1).max(64);
+
+/**
+ * Server-side access check for locked content. The playback URL for gated
+ * videos is ONLY ever returned here, after verifying a real entitlement or
+ * membership. Client-side state is never trusted.
+ */
+videoRoutes.get("/:id/access", requireUser, async (c) => {
+  const id = idParam.parse(c.req.param("id"));
+  const profile = c.get("profile")!;
+
+  if (!isBackendConfigured()) {
+    const video = mockVideos.find((candidate) => candidate.id === id);
+    if (!video) throw notFound("Video not found");
+    const isPublic = video.visibility === "public";
+    return c.json({
+      access: isPublic,
+      reason: isPublic ? "public" : "locked (mock mode has no entitlements)",
+      playbackUrl: isPublic ? video.playbackUrl : undefined,
+      source: "mock"
+    });
+  }
+
+  const db = getServiceDb()!;
+  const { data: video } = await db
+    .from("videos")
+    .select("id, creator_id, visibility, required_tier, status, moderation_status, playback_url")
+    .eq("id", id)
+    .maybeSingle();
+  if (!video || video.status !== "ready" || !["visible", "limited", "age_restricted"].includes(video.moderation_status)) {
+    throw notFound("Video not available");
+  }
+
+  if (video.visibility === "public") {
+    return c.json({ access: true, reason: "public", playbackUrl: video.playback_url, source: "db" });
+  }
+
+  // Owner always has access.
+  const { data: ownCreator } = await db
+    .from("creators")
+    .select("id")
+    .eq("profile_id", profile.id)
+    .eq("id", video.creator_id)
+    .maybeSingle();
+  if (ownCreator) {
+    return c.json({ access: true, reason: "owner", playbackUrl: video.playback_url, source: "db" });
+  }
+
+  if (video.visibility === "followers_only") {
+    const { data: follow } = await db
+      .from("follows")
+      .select("id")
+      .eq("follower_id", profile.id)
+      .eq("creator_id", video.creator_id)
+      .maybeSingle();
+    if (follow) {
+      return c.json({ access: true, reason: "follower", playbackUrl: video.playback_url, source: "db" });
+    }
+    return c.json({ access: false, reason: "follow_required", source: "db" }, 403);
+  }
+
+  if (video.visibility === "unlock_with_coins") {
+    const { data: entitlement } = await db
+      .from("creator_membership_entitlements")
+      .select("id")
+      .eq("profile_id", profile.id)
+      .eq("video_id", video.id)
+      .is("revoked_at", null)
+      .maybeSingle();
+    if (entitlement) {
+      return c.json({ access: true, reason: "coin_unlock", playbackUrl: video.playback_url, source: "db" });
+    }
+    return c.json({ access: false, reason: "unlock_required", source: "db" }, 403);
+  }
+
+  // subscribers_only / premium_tier_only: verify an active membership at the
+  // required tier or above.
+  const tierRank = { support: 1, plus: 2, premium: 3 } as const;
+  const requiredRank = tierRank[(video.required_tier ?? "support") as keyof typeof tierRank];
+  const { data: membership } = await db
+    .from("creator_memberships")
+    .select("tier, status")
+    .eq("profile_id", profile.id)
+    .eq("creator_id", video.creator_id)
+    .in("status", ["active", "grace_period"])
+    .maybeSingle();
+  if (membership && tierRank[membership.tier as keyof typeof tierRank] >= requiredRank) {
+    return c.json({ access: true, reason: "membership", playbackUrl: video.playback_url, source: "db" });
+  }
+  return c.json({ access: false, reason: "subscription_required", source: "db" }, 403);
+});
 
 async function toggleRow(table: "likes" | "saves", profileId: string, videoId: string) {
   const db = getServiceDb()!;

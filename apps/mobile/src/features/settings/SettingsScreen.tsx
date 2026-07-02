@@ -6,6 +6,7 @@ import { Card } from "../../components/Card";
 import { Screen } from "../../components/Screen";
 import { useAuth } from "../auth/AuthContext";
 import { useSocial } from "../social/SocialContext";
+import { getPaymentsProvider } from "../../services/payments/getPaymentsProvider";
 import { colors, spacing } from "../../design/theme";
 
 const legalLinks: { label: string; href: Href }[] = [
@@ -22,6 +23,7 @@ export function SettingsScreen() {
   const { blockedUserIds } = useSocial();
   const blockedCount = blockedUserIds.size;
   const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [restoreStatus, setRestoreStatus] = useState<string | null>(null);
   const deleteRequested = auth.deletionRequested;
 
   return (
@@ -54,6 +56,29 @@ export function SettingsScreen() {
         <Text style={styles.link}>Notification preferences</Text>
         <Text style={styles.chevron}>›</Text>
       </Card>
+
+      <Text style={styles.sectionTitle}>Purchases</Text>
+      <Pressable
+        onPress={async () => {
+          setRestoreStatus("Restoring…");
+          try {
+            const { restored } = await getPaymentsProvider().restorePurchases();
+            setRestoreStatus(
+              restored > 0
+                ? `Restored ${restored} purchase${restored === 1 ? "" : "s"}.`
+                : "No purchases to restore on this account."
+            );
+          } catch {
+            setRestoreStatus("Restore failed. Try again later.");
+          }
+        }}
+      >
+        <Card style={styles.row}>
+          <Text style={styles.link}>Restore purchases</Text>
+          <Text style={styles.chevron}>›</Text>
+        </Card>
+      </Pressable>
+      {restoreStatus ? <Text style={styles.restoreStatus}>{restoreStatus}</Text> : null}
 
       <Text style={styles.sectionTitle}>Support</Text>
       <Pressable
@@ -144,6 +169,7 @@ const styles = StyleSheet.create({
   supportEmail: { color: colors.secondary, fontWeight: "800" },
   deleteLink: { color: colors.danger, fontWeight: "800" },
   deleteTitle: { color: colors.text, fontWeight: "900", fontSize: 18 },
+  restoreStatus: { color: colors.textMuted, fontSize: 12, marginBottom: spacing.sm },
   deleteCopy: { color: colors.textSoft, lineHeight: 20 },
   footer: { alignItems: "center", marginTop: spacing.xl, gap: 2 },
   footerText: { color: colors.textMuted, fontSize: 12 }

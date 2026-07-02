@@ -1,5 +1,6 @@
 import type { Session } from "@supabase/supabase-js";
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { getPaymentsProvider } from "../../services/payments/getPaymentsProvider";
 import { isSupabaseConfigured, supabase } from "../../services/supabase/client";
 
 export type AuthProfile = {
@@ -85,6 +86,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
     return () => subscription.subscription.unsubscribe();
   }, [loadProfile]);
+
+  // Configure the payments provider with the auth user id so RevenueCat's
+  // app_user_id matches what the webhook resolves against.
+  useEffect(() => {
+    const userId = session?.user.id;
+    if (!userId) return;
+    getPaymentsProvider()
+      .configure(userId)
+      .catch((error) => console.warn("[payments] configure failed:", error?.message ?? error));
+  }, [session?.user.id]);
 
   const signIn = useCallback(async (email: string, password: string): Promise<AuthResult> => {
     if (!supabase) {

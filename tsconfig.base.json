@@ -32,6 +32,9 @@
       ],
       "@vuqiro/ui/admin": [
         "./packages/ui/src/admin/index.tsx"
+      ],
+      "@vuqiro/services/payments": [
+        "./packages/services/src/payments/paymentsProvider.ts"
       ]
     }
   }

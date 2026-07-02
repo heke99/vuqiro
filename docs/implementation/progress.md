@@ -1,6 +1,6 @@
 # Vuqiro Implementation Progress
 
-Current batch: Batch 13 — RevenueCat payments
+Current batch: Batch 14 — Wallet, coins, unlocks, tips and boosts
 
 Completed batches:
 
@@ -16,10 +16,10 @@ Completed batches:
 - Batch 10 — Real feed, social graph and discovery (docs/implementation/batch-010-real-feed-social.md)
 - Batch 11 — Recommendation engine and analytics (docs/implementation/batch-011-ranking-analytics.md)
 - Batch 12 — Real moderation and safety (docs/implementation/batch-012-moderation.md)
+- Batch 13 — RevenueCat payments (docs/implementation/batch-013-revenuecat.md)
 
 Remaining batches:
 
-- Batch 13 — RevenueCat payments
 - Batch 14 — Wallet, coins, unlocks, tips and boosts
 - Batch 15 — Stripe Connect creator payouts
 - Batch 16 — Creator studio
@@ -49,4 +49,4 @@ Commands run:
 - pnpm dev:api (/health check)
 - bash scripts/validate-migrations.sh (37 tables, all RLS-enabled)
 
-Next action: Batch 13 — RevenueCat SDK integration and idempotent webhook processing.
+Next action: Batch 14 — atomic coin economy with ledger integrity.

@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { loadEnv } from "@vuqiro/config";
 import { unauthorized } from "../lib/errors";
+import { processRevenueCatEvent, type RevenueCatEvent } from "../lib/revenuecatProcessor";
 import { getServiceDb, isBackendConfigured } from "../lib/supabase";
 
 export const webhookRoutes = new Hono();
@@ -24,7 +25,7 @@ webhookRoutes.post("/revenuecat/webhook", async (c) => {
     throw unauthorized("Invalid webhook credentials");
   }
 
-  const payload = (await c.req.json()) as { event?: { id?: string; type?: string; app_user_id?: string } };
+  const payload = (await c.req.json()) as { event?: RevenueCatEvent };
   const event = payload.event;
   if (!event?.id || !event.type) {
     return c.json({ error: "Malformed event" }, 400);
@@ -35,7 +36,8 @@ webhookRoutes.post("/revenuecat/webhook", async (c) => {
   }
 
   const db = getServiceDb()!;
-  // Idempotency: unique event_id. A duplicate insert means we already have it.
+  // Idempotency: unique event_id. A duplicate insert means we already
+  // processed (or are processing) this event — never double-credit.
   const { error } = await db.from("revenuecat_webhook_events").insert({
     event_id: event.id,
     event_type: event.type,
@@ -49,8 +51,19 @@ webhookRoutes.post("/revenuecat/webhook", async (c) => {
     return c.json({ error: error.message }, 500);
   }
 
-  // Processing pipeline (entitlements, coin credits) attaches in Batch 13.
-  return c.json({ received: true });
+  const result = await processRevenueCatEvent(event);
+  await db
+    .from("revenuecat_webhook_events")
+    .update({
+      status: result.status === "processed" ? "processed" : result.status === "skipped" ? "skipped" : "error",
+      error_message: result.status === "error" ? result.detail : null,
+      processed_at: new Date().toISOString()
+    })
+    .eq("event_id", event.id);
+
+  // Always 200 so RevenueCat does not retry storms; errors are recorded and
+  // can be replayed from the stored payload.
+  return c.json({ received: true, result });
 });
 
 /**
