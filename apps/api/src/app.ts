@@ -9,7 +9,9 @@ import { creatorRoutes } from "./routes/creators";
 import { feedRoutes } from "./routes/feed";
 import { moderationRoutes } from "./routes/moderation";
 import { monetizationRoutes } from "./routes/monetization";
+import { uploadRoutes } from "./routes/uploads";
 import { videoRoutes } from "./routes/videos";
+import { videoWebhookRoutes } from "./routes/videoWebhooks";
 import { walletRoutes } from "./routes/wallet";
 import { webhookRoutes } from "./routes/webhooks";
 
@@ -40,7 +42,9 @@ export function createApp() {
 
   app.route("/feed", feedRoutes);
   app.route("/creators", creatorRoutes);
+  app.route("/", uploadRoutes); // POST /videos/uploads, GET /videos/:id/status, DELETE /videos/:id
   app.route("/videos", videoRoutes);
+  app.route("/", videoWebhookRoutes); // POST /video-provider/webhook
   app.route("/comments", commentRoutes);
   app.route("/", moderationRoutes); // POST /reports, POST /blocks
   app.route("/wallet", walletRoutes);
