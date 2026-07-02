@@ -10,6 +10,7 @@ import {
   type VideoRow
 } from "../lib/feedQuery";
 import { badRequest } from "../lib/errors";
+import { rankFeedRows } from "../lib/feedRanking";
 import { getServiceDb, isBackendConfigured } from "../lib/supabase";
 import type { AppEnv } from "../middleware/auth";
 import { attachUser } from "../middleware/auth";
@@ -53,10 +54,12 @@ feedRoutes.get("/for-you", async (c) => {
   const profile = c.get("profile");
   const blocked = await blockedCreatorIds(profile?.id);
 
-  const { data, error } = await visibleVideosQuery().order("created_at", { ascending: false }).limit(50);
+  const { data, error } = await visibleVideosQuery().order("created_at", { ascending: false }).limit(100);
   if (error) throw badRequest(error.message);
 
-  const items = applyFeedRules(data as unknown as VideoRow[], blocked).map(toFeedDto);
+  const visible = applyFeedRules(data as unknown as VideoRow[], blocked);
+  const ranked = await rankFeedRows(visible, profile?.id);
+  const items = ranked.slice(0, 50).map(toFeedDto);
   return c.json({ items, source: "db" });
 });
 

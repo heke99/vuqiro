@@ -4,6 +4,7 @@ import { loadEnv } from "@vuqiro/config";
 import { ApiError } from "./lib/errors";
 import type { AppEnv } from "./middleware/auth";
 import { adminRoutes } from "./routes/admin";
+import { analyticsRoutes } from "./routes/analytics";
 import { commentRoutes } from "./routes/comments";
 import { creatorRoutes } from "./routes/creators";
 import { discoveryRoutes } from "./routes/discovery";
@@ -45,6 +46,7 @@ export function createApp() {
   app.route("/feed", feedRoutes);
   app.route("/", discoveryRoutes); // GET /search, /discover/trending, /creators/:id/videos
   app.route("/", eventRoutes); // POST /events
+  app.route("/", analyticsRoutes); // GET /admin/analytics, GET /creators/me/analytics
   app.route("/creators", creatorRoutes);
   app.route("/", uploadRoutes); // POST /videos/uploads, GET /videos/:id/status, DELETE /videos/:id
   app.route("/videos", videoRoutes);

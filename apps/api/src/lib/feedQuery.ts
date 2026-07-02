@@ -38,8 +38,11 @@ export type VideoRow = {
   like_count: number;
   comment_count: number;
   share_count: number;
+  save_count?: number;
   watch_count: number;
+  report_count?: number;
   safety_score?: number;
+  duration_seconds?: number | null;
   created_at: string;
   creators: {
     id: string;
@@ -51,7 +54,7 @@ export type VideoRow = {
 };
 
 export const VIDEO_SELECT =
-  "id, creator_id, caption, hashtags, category, visibility, moderation_status, coin_unlock_price, required_tier, playback_url, thumbnail_url, like_count, comment_count, share_count, watch_count, safety_score, created_at, creators (id, profile_id, verification_status, monetization_enabled, profiles (handle, display_name, status))";
+  "id, creator_id, caption, hashtags, category, visibility, moderation_status, coin_unlock_price, required_tier, playback_url, thumbnail_url, like_count, comment_count, share_count, save_count, watch_count, report_count, safety_score, duration_seconds, created_at, creators (id, profile_id, verification_status, monetization_enabled, profiles (handle, display_name, status))";
 
 export function toFeedDto(row: VideoRow): FeedItemDto {
   const locked = row.visibility !== "public";
