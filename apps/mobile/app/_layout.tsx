@@ -2,11 +2,32 @@ import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import React from "react";
 import { SafeAreaProvider } from "react-native-safe-area-context";
+import { useEffect } from "react";
 import { AuthProvider } from "../src/features/auth/AuthContext";
 import { SocialProvider } from "../src/features/social/SocialContext";
+import { startEventFlusher } from "../src/features/video/videoEvents";
+import { apiFetch, isApiConfigured } from "../src/services/api/client";
 import { colors } from "../src/design/theme";
 
 export default function RootLayout() {
+  useEffect(() => {
+    if (!isApiConfigured()) return;
+    return startEventFlusher(async (events) => {
+      await apiFetch("/events", {
+        method: "POST",
+        body: JSON.stringify({
+          events: events.map((event) => ({
+            name: event.name,
+            videoId: event.videoId,
+            creatorId: event.creatorId,
+            value: event.value,
+            at: event.at
+          }))
+        })
+      });
+    });
+  }, []);
+
   return (
     <SafeAreaProvider>
       <AuthProvider>

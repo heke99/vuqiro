@@ -6,6 +6,8 @@ import type { AppEnv } from "./middleware/auth";
 import { adminRoutes } from "./routes/admin";
 import { commentRoutes } from "./routes/comments";
 import { creatorRoutes } from "./routes/creators";
+import { discoveryRoutes } from "./routes/discovery";
+import { eventRoutes } from "./routes/events";
 import { feedRoutes } from "./routes/feed";
 import { moderationRoutes } from "./routes/moderation";
 import { monetizationRoutes } from "./routes/monetization";
@@ -41,6 +43,8 @@ export function createApp() {
   );
 
   app.route("/feed", feedRoutes);
+  app.route("/", discoveryRoutes); // GET /search, /discover/trending, /creators/:id/videos
+  app.route("/", eventRoutes); // POST /events
   app.route("/creators", creatorRoutes);
   app.route("/", uploadRoutes); // POST /videos/uploads, GET /videos/:id/status, DELETE /videos/:id
   app.route("/videos", videoRoutes);

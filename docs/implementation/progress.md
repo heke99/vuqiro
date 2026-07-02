@@ -1,6 +1,6 @@
 # Vuqiro Implementation Progress
 
-Current batch: Batch 10 — Real feed, social graph and discovery
+Current batch: Batch 11 — Recommendation engine and analytics
 
 Completed batches:
 
@@ -13,10 +13,10 @@ Completed batches:
 - Batch 7 — Supabase backend, auth and database (docs/implementation/batch-007-supabase-backend.md)
 - Batch 8 — API contracts and backend service layer (docs/implementation/batch-008-api-service.md)
 - Batch 9 — Real video upload and processing (docs/implementation/batch-009-video-pipeline.md)
+- Batch 10 — Real feed, social graph and discovery (docs/implementation/batch-010-real-feed-social.md)
 
 Remaining batches:
 
-- Batch 10 — Real feed, social graph and discovery
 - Batch 11 — Recommendation engine and analytics
 - Batch 12 — Real moderation and safety
 - Batch 13 — RevenueCat payments
@@ -49,4 +49,4 @@ Commands run:
 - pnpm dev:api (/health check)
 - bash scripts/validate-migrations.sh (37 tables, all RLS-enabled)
 
-Next action: Batch 10 — connect mobile UX to backend data with full visibility rules.
+Next action: Batch 11 — deterministic V1 ranking and analytics surfaces.

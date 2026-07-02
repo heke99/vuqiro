@@ -35,3 +35,29 @@ export function getBufferedEvents(): readonly VideoAnalyticsEvent[] {
 export function drainBufferedEvents(): VideoAnalyticsEvent[] {
   return buffer.splice(0, buffer.length);
 }
+
+let flusher: ReturnType<typeof setInterval> | null = null;
+
+/**
+ * Periodically flushes buffered events to the API (when configured).
+ * Failed batches are re-buffered so nothing is lost between retries.
+ */
+export function startEventFlusher(
+  send: (events: VideoAnalyticsEvent[]) => Promise<void>,
+  intervalMs = 15_000
+): () => void {
+  if (flusher) clearInterval(flusher);
+  flusher = setInterval(async () => {
+    if (buffer.length === 0) return;
+    const batch = drainBufferedEvents().slice(0, 100);
+    try {
+      await send(batch);
+    } catch {
+      buffer.unshift(...batch);
+    }
+  }, intervalMs);
+  return () => {
+    if (flusher) clearInterval(flusher);
+    flusher = null;
+  };
+}

@@ -1,8 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { FlatList, Pressable, StyleSheet, Text, View, useWindowDimensions } from "react-native";
 import type { ViewToken } from "react-native";
-import { mockCreators, mockVideos } from "@vuqiro/mock-data";
+import { mockCreators } from "@vuqiro/mock-data";
 import { colors, spacing } from "../../design/theme";
+import { mockFeedEntries, useFeed, type FeedEntry } from "../../services/data/feedData";
 import { useSocial } from "../social/SocialContext";
 import { trackEvent } from "../video/videoEvents";
 import { FeedItem } from "./FeedItem";
@@ -14,40 +15,42 @@ export function FeedScreen() {
   const social = useSocial();
   const [activeIndex, setActiveIndex] = useState(0);
   const [feedTab, setFeedTab] = useState<FeedTab>("for_you");
+  const liveFeed = useFeed(feedTab);
 
   useEffect(() => {
     trackEvent("feed_view");
   }, [feedTab]);
 
-  const data = useMemo(() => {
+  const data: FeedEntry[] = useMemo(() => {
+    // Live entries when the API is reachable, mock entries otherwise.
+    const source = liveFeed.isLive ? liveFeed.entries : mockFeedEntries();
     // Blocked creators are always hidden, in every feed.
-    const visible = mockVideos.filter((video) => !social.isBlocked(video.creatorId));
-    if (feedTab === "following") {
-      const followed = visible.filter((video) => social.isFollowing(video.creatorId));
+    const visible = source.filter((entry) => !social.isBlocked(entry.video.creatorId));
+    if (feedTab === "following" && !liveFeed.isLive) {
+      const followed = visible.filter((entry) => social.isFollowing(entry.video.creatorId));
       if (followed.length > 0) return followed;
       // Cold-start fallback until the user follows someone: verified creators.
-      return visible.filter((video) => {
-        const creator = mockCreators.find((candidate) => candidate.id === video.creatorId);
+      return visible.filter((entry) => {
+        const creator = mockCreators.find((candidate) => candidate.id === entry.video.creatorId);
         return creator?.isVerified;
       });
     }
     return visible;
-  }, [feedTab, social]);
+  }, [feedTab, social, liveFeed.isLive, liveFeed.entries]);
 
   const onViewableItemsChanged = useRef(({ viewableItems }: { viewableItems: ViewToken[] }) => {
     const visible = viewableItems.find((token) => token.isViewable);
     if (visible && typeof visible.index === "number") {
       setActiveIndex(visible.index);
-      const item = visible.item as (typeof mockVideos)[number];
-      trackEvent("video_impression", { videoId: item.id, creatorId: item.creatorId });
+      const item = visible.item as FeedEntry;
+      trackEvent("video_impression", { videoId: item.video.id, creatorId: item.video.creatorId });
     }
   });
 
   const renderItem = useCallback(
-    ({ item, index }: { item: (typeof mockVideos)[number]; index: number }) => {
-      const creator = mockCreators.find((candidate) => candidate.id === item.creatorId) ?? mockCreators[0];
-      return <FeedItem video={item} creator={creator} height={height} isActive={index === activeIndex} />;
-    },
+    ({ item, index }: { item: FeedEntry; index: number }) => (
+      <FeedItem video={item.video} creator={item.creator} height={height} isActive={index === activeIndex} />
+    ),
     [height, activeIndex]
   );
 
@@ -55,7 +58,7 @@ export function FeedScreen() {
     <View style={{ flex: 1 }}>
       <FlatList
         data={data}
-        keyExtractor={(item) => item.id}
+        keyExtractor={(item) => item.video.id}
         pagingEnabled
         showsVerticalScrollIndicator={false}
         renderItem={renderItem}

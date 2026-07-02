@@ -1,5 +1,14 @@
 import React, { createContext, useCallback, useContext, useMemo, useState } from "react";
+import { apiFetch, isApiConfigured } from "../../services/api/client";
 import { trackEvent } from "../video/videoEvents";
+
+/** Fire-and-forget backend sync; UI state is optimistic. */
+function syncToApi(path: string, body?: Record<string, unknown>): void {
+  if (!isApiConfigured()) return;
+  apiFetch(path, { method: "POST", body: body ? JSON.stringify(body) : "{}" }).catch((error) => {
+    console.warn(`[social] sync failed for ${path}:`, error?.message ?? error);
+  });
+}
 
 /**
  * Session-level social graph state (follows, blocks, likes, saves).
@@ -44,6 +53,7 @@ export function SocialProvider({ children }: { children: React.ReactNode }) {
       if (!current.has(creatorId)) trackEvent("creator_follow", { creatorId });
       return toggleInSet(current, creatorId);
     });
+    syncToApi(`/creators/${creatorId}/follow`);
   }, []);
 
   const toggleBlock = useCallback((userId: string) => {
@@ -51,6 +61,7 @@ export function SocialProvider({ children }: { children: React.ReactNode }) {
       if (!current.has(userId)) trackEvent("block_user", { creatorId: userId });
       return toggleInSet(current, userId);
     });
+    syncToApi("/blocks", { blockedProfileId: userId });
   }, []);
 
   const toggleLike = useCallback((videoId: string, creatorId?: string) => {
@@ -58,6 +69,7 @@ export function SocialProvider({ children }: { children: React.ReactNode }) {
       if (!current.has(videoId)) trackEvent("video_like", { videoId, creatorId });
       return toggleInSet(current, videoId);
     });
+    syncToApi(`/videos/${videoId}/like`);
   }, []);
 
   const toggleSave = useCallback((videoId: string, creatorId?: string) => {
@@ -65,6 +77,7 @@ export function SocialProvider({ children }: { children: React.ReactNode }) {
       if (!current.has(videoId)) trackEvent("video_save", { videoId, creatorId });
       return toggleInSet(current, videoId);
     });
+    syncToApi(`/videos/${videoId}/save`);
   }, []);
 
   const value = useMemo<SocialState>(
