@@ -1,0 +1,14 @@
+node_modules/
+.pnpm-store/
+.expo/
+.expo-shared/
+.next/
+dist/
+build/
+coverage/
+.env
+.env.*
+!.env.example
+.DS_Store
+*.log
+references/open-source/*/.git

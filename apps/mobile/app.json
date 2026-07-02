@@ -1,0 +1,24 @@
+{
+  "expo": {
+    "name": "Vuqiro",
+    "slug": "vuqiro",
+    "scheme": "vuqiro",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "newArchEnabled": true,
+    "ios": {
+      "bundleIdentifier": "com.diversasolutions.vuqiro",
+      "supportsTablet": true
+    },
+    "android": {
+      "package": "com.diversasolutions.vuqiro",
+      "adaptiveIcon": {
+        "backgroundColor": "#07070A"
+      }
+    },
+    "extra": {
+      "companyName": "Diversa Solutions LLC"
+    }
+  }
+}

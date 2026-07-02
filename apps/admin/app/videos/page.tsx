@@ -1,0 +1,23 @@
+export default function Page() {
+  return (
+    <>
+      <div className="header">
+        <div>
+          <div className="kicker">Superadmin</div>
+          <h1>Videos</h1>
+          <p className="copy">Uploaded videos, visibility, reports, watch metrics, revenue and moderation state.</p>
+        </div>
+        <button className="button ghost">Mock action</button>
+      </div>
+      <div className="grid-3">
+        <div className="card"><div className="metric">Status</div><div className="metric-value">Mock</div></div>
+        <div className="card"><div className="metric">Audit</div><div className="metric-value">On</div></div>
+        <div className="card"><div className="metric">RBAC</div><div className="metric-value">Next</div></div>
+      </div>
+      <div className="card" style={{ marginTop: 18 }}>
+        <h2>Videos foundation</h2>
+        <p className="copy">This section is scaffolded for Batch 1. Backend, real auth, database and role-based actions will be connected in later batches.</p>
+      </div>
+    </>
+  );
+}
