@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { z } from "zod";
 import { getVideoProvider } from "@vuqiro/services";
 import { badRequest, forbidden, notFound } from "../lib/errors";
+import { checkRapidUploads } from "../lib/fraudSignals";
 import { precheckModeration } from "../lib/moderationPrecheck";
 import { enforceRateLimit } from "../lib/rateLimit";
 import { getServiceDb, isBackendConfigured } from "../lib/supabase";
@@ -90,6 +91,8 @@ uploadRoutes.post("/videos/uploads", requireUser, async (c) => {
   if (gated && !creator.monetization_enabled && body.visibility !== "followers_only") {
     throw forbidden("Monetization is not enabled for this creator");
   }
+
+  await checkRapidUploads(creator.id);
 
   const { data: video, error: videoError } = await db
     .from("videos")

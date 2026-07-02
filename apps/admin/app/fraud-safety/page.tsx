@@ -1,7 +1,7 @@
 import { AdminMetricCard, AdminPageHeader, AdminStatusBadge, AdminTable } from "@vuqiro/ui/admin";
 import { mockFraudSignals } from "@vuqiro/mock-data";
 import type { FraudSignal } from "@vuqiro/types";
-import { MockAction } from "../../components/MockAction";
+import { AdminApiAction } from "../../components/AdminApiAction";
 
 export default function FraudSafetyPage() {
   const open = mockFraudSignals.filter((signal) => signal.status === "open" || signal.status === "reviewing");
@@ -39,9 +39,9 @@ export default function FraudSafetyPage() {
             render: (signal) =>
               signal.status === "open" || signal.status === "reviewing" ? (
                 <div className="actions-cell">
-                  <MockAction label="Open case" />
-                  <MockAction label="Hold payout" variant="danger" />
-                  <MockAction label="Dismiss" />
+                  <AdminApiAction label="Mark reviewing" path={`/admin/fraud-signals/${signal.id}/resolve`} body={{ resolution: "reviewing" }} />
+                  <AdminApiAction label="Actioned" variant="success" path={`/admin/fraud-signals/${signal.id}/resolve`} body={{ resolution: "actioned" }} />
+                  <AdminApiAction label="Dismiss" path={`/admin/fraud-signals/${signal.id}/resolve`} body={{ resolution: "dismissed" }} />
                 </div>
               ) : (
                 "—"

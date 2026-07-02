@@ -4,6 +4,7 @@ import { loadEnv } from "@vuqiro/config";
 import { ApiError } from "./lib/errors";
 import type { AppEnv } from "./middleware/auth";
 import { adminRoutes } from "./routes/admin";
+import { adminFraudRoutes } from "./routes/adminFraud";
 import { adminModerationRoutes } from "./routes/adminModeration";
 import { analyticsRoutes } from "./routes/analytics";
 import { appealRoutes } from "./routes/appeals";
@@ -68,6 +69,7 @@ export function createApp() {
   app.route("/", payoutRoutes); // /payouts/*, POST /admin/payouts/batch
   app.route("/", notificationRoutes); // /notifications, /notifications/read, /notifications/preferences
   app.route("/admin", adminModerationRoutes); // moderation case detail + decisions
+  app.route("/admin", adminFraudRoutes); // fraud signals
   app.route("/admin", adminRoutes);
 
   return app;

@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { z } from "zod";
 import { badRequest } from "../lib/errors";
+import { checkRepeatedReports } from "../lib/fraudSignals";
 import { enforceRateLimit } from "../lib/rateLimit";
 import { getServiceDb, isBackendConfigured } from "../lib/supabase";
 import type { AppEnv } from "../middleware/auth";
@@ -94,6 +95,9 @@ moderationRoutes.post("/reports", requireUser, async (c) => {
     .select("id, target_type, target_id, reason, status, moderation_case_id, created_at")
     .single();
   if (reportError) throw badRequest(reportError.message);
+
+  // Abuse signal: many distinct reporters on one target.
+  await checkRepeatedReports(body.targetType, body.targetId);
 
   return c.json({ report, source: "db" }, 201);
 });

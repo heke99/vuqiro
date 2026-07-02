@@ -279,6 +279,9 @@ export async function processRevenueCatEvent(event: RevenueCatEvent): Promise<Pr
       case "REFUND_REVERSED":
       case "REVOKED": {
         await upsertPurchase(event, profileId, product, event.type === "REFUND" ? "refunded" : "revoked");
+        // Refund abuse signal check (purchase/refund alternation).
+        const { checkSuspiciousWallet } = await import("./fraudSignals");
+        await checkSuspiciousWallet(profileId);
         if (product?.packageType === "coin_pack" || product?.packageType === "boost_pack") {
           const detail = await reverseCoins(event, profileId, product);
           return { status: "processed", detail };
