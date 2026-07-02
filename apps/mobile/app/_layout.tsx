@@ -3,11 +3,48 @@ import { StatusBar } from "expo-status-bar";
 import React from "react";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { useEffect } from "react";
+import { View, Text, StyleSheet } from "react-native";
+import { Button } from "../src/components/Button";
+import { captureError } from "../src/services/monitoring";
 import { AuthProvider } from "../src/features/auth/AuthContext";
 import { SocialProvider } from "../src/features/social/SocialContext";
 import { startEventFlusher } from "../src/features/video/videoEvents";
 import { apiFetch, isApiConfigured } from "../src/services/api/client";
 import { colors } from "../src/design/theme";
+
+/**
+ * Root error boundary (Expo Router convention): the last line of defense —
+ * errors are reported to monitoring and the user gets a recoverable screen
+ * instead of a crash.
+ */
+export function ErrorBoundary({ error, retry }: { error: Error; retry: () => Promise<void> }) {
+  useEffect(() => {
+    captureError(error, "root-error-boundary");
+  }, [error]);
+
+  return (
+    <View style={errorStyles.container}>
+      <Text style={errorStyles.title}>Something went wrong</Text>
+      <Text style={errorStyles.copy}>
+        The app hit an unexpected error. Your data is safe — try again.
+      </Text>
+      <Button label="Try again" onPress={retry} />
+    </View>
+  );
+}
+
+const errorStyles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: colors.background,
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 32,
+    gap: 12
+  },
+  title: { color: colors.text, fontSize: 24, fontWeight: "900" },
+  copy: { color: colors.textMuted, textAlign: "center", lineHeight: 20, marginBottom: 8 }
+});
 
 export default function RootLayout() {
   useEffect(() => {

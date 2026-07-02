@@ -3,6 +3,7 @@ import { ZodError } from "zod";
 import { loadEnv } from "@vuqiro/config";
 import { ApiError } from "./lib/errors";
 import type { AppEnv } from "./middleware/auth";
+import { requestLogger, securityHeaders } from "./middleware/logging";
 import { adminRoutes } from "./routes/admin";
 import { adminFraudRoutes } from "./routes/adminFraud";
 import { adminModerationRoutes } from "./routes/adminModeration";
@@ -28,6 +29,11 @@ import { webhookRoutes } from "./routes/webhooks";
 export function createApp() {
   const app = new Hono<AppEnv>();
   const env = loadEnv();
+
+  if (env.appEnv !== "development") {
+    app.use("*", requestLogger);
+  }
+  app.use("*", securityHeaders);
 
   app.onError((error, c) => {
     if (error instanceof ApiError) {
