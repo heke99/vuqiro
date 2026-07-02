@@ -126,37 +126,24 @@ async function creditCoins(
   event: RevenueCatEvent,
   profileId: string,
   product: ProductMapping,
-  purchaseId: string | null
+  _purchaseId: string | null
 ): Promise<string> {
   const db = getServiceDb()!;
   const totalCoins = (product.coinsAmount ?? 0) + (product.bonusCoinsAmount ?? 0);
   if (totalCoins <= 0) return "no coins on product";
 
-  let { data: wallet } = await db.from("wallets").select("id, coin_balance").eq("profile_id", profileId).maybeSingle();
-  if (!wallet) {
-    const { data: created } = await db
-      .from("wallets")
-      .insert({ profile_id: profileId })
-      .select("id, coin_balance")
-      .single();
-    wallet = created!;
-  }
-
-  // Idempotent credit: the coin transaction key is derived from the event id.
-  const { error } = await db.from("coin_transactions").insert({
-    wallet_id: wallet.id,
-    type: "purchase",
-    amount: totalCoins,
-    label: `${product.packageCode} purchase`,
-    related_purchase_id: purchaseId,
-    idempotency_key: `rc:${event.id}`
+  // Atomic + idempotent via the wallet_credit Postgres function (row lock,
+  // idempotency key derived from the webhook event id).
+  const { data, error } = await db.rpc("wallet_credit", {
+    p_profile_id: profileId,
+    p_amount: totalCoins,
+    p_type: "purchase",
+    p_label: `${product.packageCode} purchase`,
+    p_idempotency_key: `rc:${event.id}`
   });
-  if (error) {
-    if (error.code === "23505") return "duplicate credit skipped";
-    throw new Error(error.message);
-  }
-  await db.from("wallets").update({ coin_balance: wallet.coin_balance + totalCoins }).eq("id", wallet.id);
-  return `credited ${totalCoins} coins`;
+  if (error) throw new Error(error.message);
+  const row = (data as { duplicate: boolean }[])[0];
+  return row?.duplicate ? "duplicate credit skipped" : `credited ${totalCoins} coins`;
 }
 
 async function reverseCoins(event: RevenueCatEvent, profileId: string, product: ProductMapping): Promise<string> {
@@ -164,26 +151,16 @@ async function reverseCoins(event: RevenueCatEvent, profileId: string, product: 
   const totalCoins = (product.coinsAmount ?? 0) + (product.bonusCoinsAmount ?? 0);
   if (totalCoins <= 0) return "no coins to reverse";
 
-  const { data: wallet } = await db.from("wallets").select("id, coin_balance").eq("profile_id", profileId).maybeSingle();
-  if (!wallet) return "no wallet";
-
-  const { error } = await db.from("coin_transactions").insert({
-    wallet_id: wallet.id,
-    type: "reversal",
-    amount: -totalCoins,
-    label: `${product.packageCode} refund reversal`,
-    idempotency_key: `rc-reversal:${event.id}`
+  // Atomic clawback: floors at zero, idempotent on the event id.
+  const { data, error } = await db.rpc("wallet_reverse", {
+    p_profile_id: profileId,
+    p_amount: totalCoins,
+    p_label: `${product.packageCode} refund reversal`,
+    p_idempotency_key: `rc-reversal:${event.id}`
   });
-  if (error) {
-    if (error.code === "23505") return "duplicate reversal skipped";
-    throw new Error(error.message);
-  }
-  // Balances never go below zero even if coins were already spent.
-  await db
-    .from("wallets")
-    .update({ coin_balance: Math.max(0, wallet.coin_balance - totalCoins) })
-    .eq("id", wallet.id);
-  return `reversed ${totalCoins} coins`;
+  if (error) throw new Error(error.message);
+  const row = (data as { duplicate: boolean }[])[0];
+  return row?.duplicate ? "duplicate reversal skipped" : `reversed ${totalCoins} coins`;
 }
 
 function tierFromCode(code: string): "support" | "plus" | "premium" {

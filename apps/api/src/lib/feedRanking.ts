@@ -77,6 +77,23 @@ async function loadEventAggregates(videoIds: string[]): Promise<EventAggregates>
   return aggregates;
 }
 
+/** Active boost campaigns per video, normalized 0..1 by spend. */
+async function loadActiveBoosts(videoIds: string[]): Promise<Map<string, number>> {
+  const boosts = new Map<string, number>();
+  const db = getServiceDb();
+  if (!db || videoIds.length === 0) return boosts;
+  const { data } = await db
+    .from("boost_campaigns")
+    .select("video_id, coins_spent")
+    .in("video_id", videoIds)
+    .eq("status", "active");
+  for (const campaign of data ?? []) {
+    const score = Math.min(1, campaign.coins_spent / 2500);
+    boosts.set(campaign.video_id, Math.max(boosts.get(campaign.video_id) ?? 0, score));
+  }
+  return boosts;
+}
+
 /**
  * Ranks visible video rows for a viewer using the deterministic V1 engine,
  * blending stored counters with recent watch-event aggregates.
@@ -84,9 +101,10 @@ async function loadEventAggregates(videoIds: string[]): Promise<EventAggregates>
 export async function rankFeedRows(rows: VideoRow[], profileId: string | undefined): Promise<VideoRow[]> {
   if (rows.length === 0) return rows;
 
-  const [viewer, aggregates] = await Promise.all([
+  const [viewer, aggregates, boosts] = await Promise.all([
     loadViewerContext(profileId),
-    loadEventAggregates(rows.map((row) => row.id))
+    loadEventAggregates(rows.map((row) => row.id)),
+    loadActiveBoosts(rows.map((row) => row.id))
   ]);
 
   const videosPerCreator = new Map<string, number>();
@@ -118,7 +136,8 @@ export async function rankFeedRows(rows: VideoRow[], profileId: string | undefin
       creatorVerified: row.creators?.verification_status === "verified",
       creatorVideoCount: videosPerCreator.get(row.creator_id) ?? 1,
       viewerFollowsCreator: viewer.followedCreatorIds.has(row.creator_id),
-      viewerSubscribedToCreator: viewer.subscribedCreatorIds.has(row.creator_id)
+      viewerSubscribedToCreator: viewer.subscribedCreatorIds.has(row.creator_id),
+      boostScore: boosts.get(row.id) ?? 0
     };
   });
 

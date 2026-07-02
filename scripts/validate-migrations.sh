@@ -64,5 +64,72 @@ end
 \$\$;
 "
 
+echo "==> Wallet function assertions"
+run_sql "$DB_NAME" "
+do \$\$
+declare
+  v_profile uuid;
+  v_result record;
+  v_balance integer;
+begin
+  select id into v_profile from public.profiles where handle = 'vuqiro_viewer';
+  if v_profile is null then
+    raise exception 'seed viewer profile missing';
+  end if;
+
+  -- 1. Spend deducts correctly (seed balance 1250).
+  select * into v_result from public.wallet_spend(v_profile, 100, 'tip', 'test tip', 'test-key-1');
+  if v_result.new_balance <> 1150 then
+    raise exception 'expected 1150 after spend, got %', v_result.new_balance;
+  end if;
+
+  -- 2. Idempotent replay does not double-deduct.
+  select * into v_result from public.wallet_spend(v_profile, 100, 'tip', 'test tip', 'test-key-1');
+  if not v_result.duplicate then
+    raise exception 'expected duplicate=true on replayed key';
+  end if;
+  select coin_balance into v_balance from public.wallets where profile_id = v_profile;
+  if v_balance <> 1150 then
+    raise exception 'replay changed balance: %', v_balance;
+  end if;
+
+  -- 3. Overdraw is rejected.
+  begin
+    perform public.wallet_spend(v_profile, 999999, 'tip', 'overdraw', 'test-key-2');
+    raise exception 'overdraw was not rejected';
+  exception
+    when others then
+      if sqlerrm like '%insufficient balance%' then
+        null; -- expected
+      else
+        raise;
+      end if;
+  end;
+  select coin_balance into v_balance from public.wallets where profile_id = v_profile;
+  if v_balance <> 1150 then
+    raise exception 'failed spend changed balance: %', v_balance;
+  end if;
+
+  -- 4. Credit adds and is idempotent.
+  select * into v_result from public.wallet_credit(v_profile, 500, 'purchase', 'test credit', 'credit-key-1');
+  if v_result.new_balance <> 1650 then
+    raise exception 'expected 1650 after credit, got %', v_result.new_balance;
+  end if;
+  select * into v_result from public.wallet_credit(v_profile, 500, 'purchase', 'test credit', 'credit-key-1');
+  if not v_result.duplicate then
+    raise exception 'credit replay not idempotent';
+  end if;
+
+  -- 5. Reversal floors at zero.
+  select * into v_result from public.wallet_reverse(v_profile, 99999, 'test clawback', 'reverse-key-1');
+  if v_result.new_balance <> 0 then
+    raise exception 'expected 0 after clawback, got %', v_result.new_balance;
+  end if;
+
+  raise notice 'wallet function assertions passed';
+end
+\$\$;
+"
+
 TABLE_COUNT=$("$PSQL" -t -A -d "$DB_NAME" -c "select count(*) from pg_tables where schemaname='public'")
 echo "==> OK: migrations applied cleanly. public tables: $TABLE_COUNT (all with RLS enabled)"
