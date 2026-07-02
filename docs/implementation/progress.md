@@ -1,6 +1,6 @@
 # Vuqiro Implementation Progress
 
-Current batch: Batch 8 — API contracts and backend service layer
+Current batch: Batch 9 — Real video upload and processing
 
 Completed batches:
 
@@ -11,10 +11,10 @@ Completed batches:
 - Batch 5 — Video adapter and feed UX (docs/implementation/batch-005-video-feed.md)
 - Batch 6 — Discover, search, comments and social UX (docs/implementation/batch-006-social-ux.md)
 - Batch 7 — Supabase backend, auth and database (docs/implementation/batch-007-supabase-backend.md)
+- Batch 8 — API contracts and backend service layer (docs/implementation/batch-008-api-service.md)
 
 Remaining batches:
 
-- Batch 8 — API contracts and backend service layer
 - Batch 9 — Real video upload and processing
 - Batch 10 — Real feed, social graph and discovery
 - Batch 11 — Recommendation engine and analytics
@@ -34,7 +34,7 @@ Remaining batches:
 Known issues:
 
 - Real auth requires Supabase env vars; mock mode otherwise (by design).
-- API service is a health-check shell until Batch 8.
+- Webhook processing pipelines complete in Batches 13 (RevenueCat) and 15 (Stripe).
 - Provider adapters are contracts + mocks only until Batches 9/13/15.
 - Social actions (follow/like/save) are local mock state until Batch 10.
 
@@ -49,4 +49,4 @@ Commands run:
 - pnpm dev:api (/health check)
 - bash scripts/validate-migrations.sh (37 tables, all RLS-enabled)
 
-Next action: Batch 8 — typed API endpoints with validation, RBAC and audit logging.
+Next action: Batch 9 — Mux video pipeline with mock fallback and status machine.

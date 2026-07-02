@@ -1,9 +1,32 @@
 import { Hono } from "hono";
+import { ZodError } from "zod";
 import { loadEnv } from "@vuqiro/config";
+import { ApiError } from "./lib/errors";
+import type { AppEnv } from "./middleware/auth";
+import { adminRoutes } from "./routes/admin";
+import { commentRoutes } from "./routes/comments";
+import { creatorRoutes } from "./routes/creators";
+import { feedRoutes } from "./routes/feed";
+import { moderationRoutes } from "./routes/moderation";
+import { monetizationRoutes } from "./routes/monetization";
+import { videoRoutes } from "./routes/videos";
+import { walletRoutes } from "./routes/wallet";
+import { webhookRoutes } from "./routes/webhooks";
 
 export function createApp() {
-  const app = new Hono();
+  const app = new Hono<AppEnv>();
   const env = loadEnv();
+
+  app.onError((error, c) => {
+    if (error instanceof ApiError) {
+      return c.json({ error: error.message, code: error.code }, error.status as 400);
+    }
+    if (error instanceof ZodError) {
+      return c.json({ error: "Validation failed", issues: error.issues }, 400);
+    }
+    console.error("[api] unhandled error", error);
+    return c.json({ error: "Internal server error" }, 500);
+  });
 
   app.get("/health", (c) =>
     c.json({
@@ -14,6 +37,16 @@ export function createApp() {
       time: new Date().toISOString()
     })
   );
+
+  app.route("/feed", feedRoutes);
+  app.route("/creators", creatorRoutes);
+  app.route("/videos", videoRoutes);
+  app.route("/comments", commentRoutes);
+  app.route("/", moderationRoutes); // POST /reports, POST /blocks
+  app.route("/wallet", walletRoutes);
+  app.route("/monetization", monetizationRoutes);
+  app.route("/", webhookRoutes); // POST /revenuecat/webhook, POST /stripe/webhook
+  app.route("/admin", adminRoutes);
 
   return app;
 }

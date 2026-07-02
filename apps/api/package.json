@@ -12,11 +12,13 @@
   },
   "dependencies": {
     "@hono/node-server": "^1.13.0",
+    "@supabase/supabase-js": "^2",
     "@vuqiro/config": "workspace:*",
     "@vuqiro/services": "workspace:*",
     "@vuqiro/types": "workspace:*",
     "hono": "^4.6.0",
-    "zod": "^3.24.0"
+    "zod": "^3.24.0",
+    "@vuqiro/mock-data": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
