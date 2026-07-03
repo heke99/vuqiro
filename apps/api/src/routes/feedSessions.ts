@@ -82,7 +82,9 @@ const impressionSchema = z.object({
   source: z.string().max(40).optional()
 });
 
-const impressionBody = z.union([impressionSchema, z.object({ impressions: z.array(impressionSchema).max(50) })]);
+// The batch shape must be tried first: every field on a single impression is
+// optional, so a batch body would otherwise match the single-impression schema.
+const impressionBody = z.union([z.object({ impressions: z.array(impressionSchema).max(50) }), impressionSchema]);
 
 /** Accepts a single impression or a batch (mobile flushes in batches). */
 feedSessionRoutes.post("/feed/impression", async (c) => {
