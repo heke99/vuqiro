@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { z } from "zod";
-import { mockLedgerEntries, mockWalletTransactions } from "@vuqiro/mock-data";
+import { mockLedgerEntries, mockPayoutHolds, mockPayouts, mockWalletTransactions } from "@vuqiro/mock-data";
 import { writeAuditLog } from "../lib/audit";
 import { badRequest, notFound } from "../lib/errors";
 import { getServiceDb, isBackendConfigured } from "../lib/supabase";
@@ -32,6 +32,28 @@ adminFinanceRoutes.get("/wallet/transactions", async (c) => {
   const { data, error } = await query;
   if (error) throw badRequest(error.message);
   return c.json({ transactions: data ?? [], source: "db" });
+});
+
+adminFinanceRoutes.get("/payouts", async (c) => {
+  if (!isBackendConfigured()) {
+    return c.json({ payouts: mockPayouts, holds: mockPayoutHolds, source: "mock" });
+  }
+  const db = getServiceDb()!;
+  const [{ data: payouts, error }, { data: holds }] = await Promise.all([
+    db
+      .from("creator_payouts")
+      .select("*, creators (profiles (handle, display_name))")
+      .order("created_at", { ascending: false })
+      .limit(200),
+    db
+      .from("payout_holds")
+      .select("*, creators (profiles (handle))")
+      .is("released_at", null)
+      .order("created_at", { ascending: false })
+      .limit(100)
+  ]);
+  if (error) throw badRequest(error.message);
+  return c.json({ payouts: payouts ?? [], holds: holds ?? [], source: "db" });
 });
 
 adminFinanceRoutes.get("/purchases", async (c) => {

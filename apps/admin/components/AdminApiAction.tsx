@@ -21,7 +21,7 @@ export function AdminApiAction({
 }: {
   label: string;
   path: string;
-  method?: "POST" | "DELETE";
+  method?: "POST" | "DELETE" | "PATCH" | "PUT";
   body?: Record<string, unknown>;
   variant?: "ghost" | "primary" | "danger" | "success";
 }) {

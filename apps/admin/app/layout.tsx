@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { AdminNav } from "../components/AdminNav";
 import { AdminSignIn } from "../components/AdminSignIn";
+import { SignOutButton } from "../components/SignOutButton";
 import { getAdminIdentity } from "../lib/adminAuth";
 import "./globals.css";
 
@@ -8,6 +9,9 @@ export const metadata: Metadata = {
   title: "Vuqiro Admin",
   description: "Superadmin console for Vuqiro by Diversa Solutions LLC"
 };
+
+// Every page depends on the caller's session + live API data.
+export const dynamic = "force-dynamic";
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const identity = await getAdminIdentity();
@@ -17,6 +21,23 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       <html lang="en">
         <body>
           <AdminSignIn />
+        </body>
+      </html>
+    );
+  }
+
+  if (identity.mode === "blocked") {
+    return (
+      <html lang="en">
+        <body>
+          <div className="blocked-screen">
+            <h1>Admin console is not configured</h1>
+            <p>
+              This is a production build without Supabase credentials. Set NEXT_PUBLIC_SUPABASE_URL and
+              NEXT_PUBLIC_SUPABASE_ANON_KEY (plus NEXT_PUBLIC_API_URL) and redeploy. Mock mode is disabled in
+              production so the console can never silently serve fake data.
+            </p>
+          </div>
         </body>
       </html>
     );
@@ -34,13 +55,14 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                 <div className="logo-sub">Diversa Solutions LLC</div>
               </div>
             </div>
-            <AdminNav />
+            <AdminNav role={identity.admin.role} />
           </aside>
           <main>
             {identity.mode === "mock" ? (
               <div className="mode-banner">
                 Mock mode — Supabase env not configured. Sign-in and RBAC activate automatically when
-                NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY are set.
+                NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY are set. Mock mode is blocked in
+                production builds.
               </div>
             ) : null}
             <div className="topbar">
@@ -56,6 +78,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                 <br />
                 Company: Diversa Solutions LLC
               </div>
+              {identity.mode === "real" ? <SignOutButton /> : null}
             </div>
             <div className="content">{children}</div>
           </main>
