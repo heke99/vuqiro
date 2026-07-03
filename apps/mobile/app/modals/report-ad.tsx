@@ -1,45 +1,38 @@
 import { useLocalSearchParams } from "expo-router";
 import React, { useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
-import type { ReportReason } from "@vuqiro/types";
+import type { AdReportReason } from "@vuqiro/types";
 import { Button } from "../../src/components/Button";
 import { ModalShell } from "../../src/components/ModalShell";
 import { apiFetch, isApiConfigured } from "../../src/services/api/client";
 import { colors, radii, spacing } from "../../src/design/theme";
 
-const reasons: { code: ReportReason; label: string }[] = [
-  { code: "harassment", label: "Harassment" },
-  { code: "hate", label: "Hate" },
-  { code: "violence", label: "Violence" },
-  { code: "sexual_content", label: "Sexual content" },
-  { code: "minor_safety", label: "Minor safety" },
-  { code: "spam", label: "Spam" },
+const reasons: { code: AdReportReason; label: string }[] = [
+  { code: "misleading", label: "Misleading" },
+  { code: "offensive", label: "Offensive" },
   { code: "scam", label: "Scam" },
-  { code: "copyright", label: "Copyright" },
-  { code: "misinformation", label: "Misinformation" },
+  { code: "adult_content", label: "Adult content" },
+  { code: "dangerous_product", label: "Dangerous product" },
+  { code: "irrelevant", label: "Not relevant" },
   { code: "other", label: "Other" }
 ];
 
-export default function ReportModal() {
-  const { targetType, targetId } = useLocalSearchParams<{ targetType?: string; targetId?: string }>();
-  const [selected, setSelected] = useState<ReportReason | null>(null);
+export default function ReportAdModal() {
+  const { creativeId } = useLocalSearchParams<{ creativeId?: string }>();
+  const [selected, setSelected] = useState<AdReportReason | null>(null);
   const [submitted, setSubmitted] = useState(false);
-  const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
 
   const submit = async () => {
-    if (!selected) return;
+    if (!selected || !creativeId) return;
     setBusy(true);
     setError(null);
     try {
-      if (isApiConfigured() && targetId) {
-        await apiFetch("/reports", {
+      if (isApiConfigured()) {
+        await apiFetch("/ads/report", {
           method: "POST",
-          body: JSON.stringify({
-            targetType: targetType ?? "video",
-            targetId,
-            reason: selected
-          })
+          body: JSON.stringify({ creativeId, reason: selected })
         });
       }
       setSubmitted(true);
@@ -54,18 +47,15 @@ export default function ReportModal() {
     return (
       <ModalShell title="Report received" closeLabel="Done">
         <Text style={styles.confirmation}>
-          Thank you. Our moderation team will review this {targetType ?? "content"}. You can also
-          block the account from their profile to stop seeing their content.
+          Thank you. Our ads team will review this ad. Repeatedly reported ads are paused automatically while under
+          review.
         </Text>
       </ModalShell>
     );
   }
 
   return (
-    <ModalShell
-      title={targetType === "profile" ? "Report profile" : targetType === "comment" ? "Report comment" : "Report content"}
-      subtitle="Reports go to Vuqiro moderation for review. Serious safety reports are prioritized."
-    >
+    <ModalShell title="Report ad" subtitle="Tell us what's wrong with this sponsored content.">
       <View style={styles.reasons}>
         {reasons.map((reason) => (
           <Pressable
@@ -79,14 +69,13 @@ export default function ReportModal() {
           </Pressable>
         ))}
       </View>
-      {error ? <Text style={styles.errorText}>{error}</Text> : null}
+      {error ? <Text style={styles.error}>{error}</Text> : null}
       <Button
         label={busy ? "Submitting…" : selected ? "Submit report" : "Select a reason"}
         variant={selected ? "danger" : "ghost"}
         onPress={submit}
         style={{ marginTop: spacing.lg }}
       />
-      {targetId ? <Text style={styles.meta}>Reference: {targetType} · {targetId}</Text> : null}
     </ModalShell>
   );
 }
@@ -104,7 +93,6 @@ const styles = StyleSheet.create({
   reasonSelected: { backgroundColor: colors.danger, borderColor: colors.danger },
   reasonText: { color: colors.textSoft, fontWeight: "800", fontSize: 13 },
   reasonTextSelected: { color: colors.white },
-  meta: { color: colors.textMuted, fontSize: 11, marginTop: spacing.md, textAlign: "center" },
-  errorText: { color: colors.danger, marginTop: spacing.md, fontSize: 13 },
+  error: { color: colors.danger, marginTop: spacing.md, fontSize: 13 },
   confirmation: { color: colors.textSoft, lineHeight: 22 }
 });

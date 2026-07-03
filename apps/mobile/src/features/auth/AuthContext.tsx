@@ -1,5 +1,6 @@
 import type { Session } from "@supabase/supabase-js";
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { apiFetch, isApiConfigured } from "../../services/api/client";
 import { getPaymentsProvider } from "../../services/payments/getPaymentsProvider";
 import { isSupabaseConfigured, supabase } from "../../services/supabase/client";
 
@@ -139,7 +140,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const requestAccountDeletion = useCallback(async (): Promise<AuthResult> => {
     setDeletionRequested(true);
-    if (!supabase || !profile) return { ok: true };
+    if (!profile) return { ok: true };
+    // Preferred path: the API (audited, rate-limited, sets profile status).
+    if (isApiConfigured()) {
+      try {
+        await apiFetch("/account/deletion", { method: "POST", body: JSON.stringify({}) });
+        return { ok: true };
+      } catch (error) {
+        setDeletionRequested(false);
+        return { ok: false, error: error instanceof Error ? error.message : "Request failed" };
+      }
+    }
+    if (!supabase) return { ok: true };
     const { error } = await supabase.from("account_deletion_requests").insert({ profile_id: profile.id });
     if (error) {
       setDeletionRequested(false);
@@ -150,7 +162,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const cancelAccountDeletion = useCallback(async (): Promise<AuthResult> => {
     setDeletionRequested(false);
-    if (!supabase || !profile) return { ok: true };
+    if (!profile) return { ok: true };
+    if (isApiConfigured()) {
+      try {
+        await apiFetch("/account/deletion", { method: "DELETE" });
+        return { ok: true };
+      } catch (error) {
+        return { ok: false, error: error instanceof Error ? error.message : "Request failed" };
+      }
+    }
+    if (!supabase) return { ok: true };
     const { error } = await supabase
       .from("account_deletion_requests")
       .update({ status: "cancelled" })

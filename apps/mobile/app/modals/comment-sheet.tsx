@@ -1,19 +1,70 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
-import React, { useMemo, useState } from "react";
-import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { mockComments } from "@vuqiro/mock-data";
 import type { Comment } from "@vuqiro/types";
 import { Avatar } from "../../src/components/Avatar";
 import { Badge } from "../../src/components/Badge";
 import { ModalShell } from "../../src/components/ModalShell";
+import { useAuth } from "../../src/features/auth/AuthContext";
 import { useSocial } from "../../src/features/social/SocialContext";
 import { trackEvent } from "../../src/features/video/videoEvents";
+import { apiFetch, isApiConfigured } from "../../src/services/api/client";
 import { colors, radii, spacing } from "../../src/design/theme";
 
-function CommentRow({ comment, replies }: { comment: Comment; replies: Comment[] }) {
+type CommentRowDto = {
+  id: string;
+  video_id: string;
+  author_id: string;
+  parent_comment_id?: string | null;
+  text: string;
+  like_count: number;
+  reply_count: number;
+  created_at: string;
+  profiles?: { handle?: string; display_name?: string } | null;
+};
+
+function dtoToComment(dto: CommentRowDto): Comment {
+  return {
+    id: dto.id,
+    videoId: dto.video_id,
+    authorId: dto.author_id,
+    authorHandle: dto.profiles?.handle ?? "user",
+    authorDisplayName: dto.profiles?.display_name ?? dto.profiles?.handle ?? "User",
+    isCreator: false,
+    isSubscriber: false,
+    parentCommentId: dto.parent_comment_id ?? undefined,
+    text: dto.text,
+    likeCount: dto.like_count,
+    replyCount: dto.reply_count,
+    createdAt: dto.created_at
+  };
+}
+
+function CommentRow({
+  comment,
+  replies,
+  ownProfileId,
+  onDelete
+}: {
+  comment: Comment;
+  replies: Comment[];
+  ownProfileId?: string;
+  onDelete: (commentId: string) => void;
+}) {
   const router = useRouter();
   const social = useSocial();
   const [liked, setLiked] = useState(false);
+
+  const toggleLike = () => {
+    setLiked((value) => !value);
+    if (isApiConfigured()) {
+      apiFetch(`/comments/${comment.id}/like`, { method: "POST" }).catch(() => setLiked((value) => !value));
+    }
+  };
+
+  const isOwn = ownProfileId && comment.authorId === ownProfileId;
+
   return (
     <View style={styles.commentBlock}>
       <View style={styles.commentRow}>
@@ -26,25 +77,33 @@ function CommentRow({ comment, replies }: { comment: Comment; replies: Comment[]
           </View>
           <Text style={styles.text}>{comment.text}</Text>
           <View style={styles.actions}>
-            <Pressable onPress={() => setLiked((value) => !value)}>
+            <Pressable onPress={toggleLike}>
               <Text style={[styles.action, liked && styles.actionActive]}>
                 {liked ? "Liked" : "Like"} · {comment.likeCount + (liked ? 1 : 0)}
               </Text>
             </Pressable>
             <Text style={styles.action}>Reply{comment.replyCount > 0 ? ` (${comment.replyCount})` : ""}</Text>
-            <Pressable
-              onPress={() =>
-                router.push({
-                  pathname: "/modals/report",
-                  params: { targetType: "comment", targetId: comment.id }
-                })
-              }
-            >
-              <Text style={styles.action}>Report</Text>
-            </Pressable>
-            <Pressable onPress={() => social.toggleBlock(comment.authorId)}>
-              <Text style={styles.action}>Block</Text>
-            </Pressable>
+            {isOwn ? (
+              <Pressable onPress={() => onDelete(comment.id)}>
+                <Text style={[styles.action, { color: colors.danger }]}>Delete</Text>
+              </Pressable>
+            ) : (
+              <>
+                <Pressable
+                  onPress={() =>
+                    router.push({
+                      pathname: "/modals/report",
+                      params: { targetType: "comment", targetId: comment.id }
+                    })
+                  }
+                >
+                  <Text style={styles.action}>Report</Text>
+                </Pressable>
+                <Pressable onPress={() => social.toggleBlock(comment.authorId)}>
+                  <Text style={styles.action}>Block</Text>
+                </Pressable>
+              </>
+            )}
           </View>
         </View>
       </View>
@@ -67,51 +126,96 @@ function CommentRow({ comment, replies }: { comment: Comment; replies: Comment[]
 export default function CommentSheet() {
   const { videoId } = useLocalSearchParams<{ videoId?: string }>();
   const social = useSocial();
+  const auth = useAuth();
   const [draft, setDraft] = useState("");
-  const [localComments, setLocalComments] = useState<Comment[]>([]);
+  const [comments, setComments] = useState<Comment[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [isLive, setIsLive] = useState(false);
+
+  const load = useCallback(async () => {
+    const id = videoId ?? "video_001";
+    if (!isApiConfigured()) {
+      setComments(mockComments.filter((comment) => comment.videoId === id));
+      setIsLive(false);
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await apiFetch<{ comments: (CommentRowDto | Comment)[]; source: string }>(
+        `/videos/${id}/comments`
+      );
+      const mapped = response.comments.map((row) =>
+        "video_id" in row ? dtoToComment(row as CommentRowDto) : (row as Comment)
+      );
+      setComments(mapped);
+      setIsLive(response.source === "db");
+    } catch (loadError) {
+      setError(loadError instanceof Error ? loadError.message : "Could not load comments");
+      setComments(mockComments.filter((comment) => comment.videoId === id));
+    } finally {
+      setLoading(false);
+    }
+  }, [videoId]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
 
   const { topLevel, repliesByParent } = useMemo(() => {
-    const forVideo = mockComments.filter(
-      (comment) => comment.videoId === (videoId ?? "video_001") && !social.isBlocked(comment.authorId)
-    );
-    const topLevelComments = forVideo.filter((comment) => !comment.parentCommentId);
+    const visible = comments.filter((comment) => !social.isBlocked(comment.authorId));
+    const topLevelComments = visible.filter((comment) => !comment.parentCommentId);
     const replyMap = new Map<string, Comment[]>();
-    for (const comment of forVideo) {
+    for (const comment of visible) {
       if (comment.parentCommentId) {
-        replyMap.set(comment.parentCommentId, [
-          ...(replyMap.get(comment.parentCommentId) ?? []),
-          comment
-        ]);
+        replyMap.set(comment.parentCommentId, [...(replyMap.get(comment.parentCommentId) ?? []), comment]);
       }
     }
     return { topLevel: topLevelComments, repliesByParent: replyMap };
-  }, [videoId, social]);
+  }, [comments, social]);
 
-  const submit = () => {
+  const submit = async () => {
     const text = draft.trim();
     if (!text) return;
-    trackEvent("comment_submit", { videoId: videoId ?? "video_001" });
-    setLocalComments((current) => [
-      {
-        id: `local_${Date.now()}`,
-        videoId: videoId ?? "video_001",
-        authorId: "user_me",
-        authorHandle: "vuqiro_user",
-        authorDisplayName: "You",
-        isCreator: false,
-        isSubscriber: false,
-        text,
-        likeCount: 0,
-        replyCount: 0,
-        createdAt: new Date().toISOString()
-      },
-      ...current
-    ]);
+    const id = videoId ?? "video_001";
+    trackEvent("comment_submit", { videoId: id });
+    // Optimistic insert; reconciled on reload.
+    const optimistic: Comment = {
+      id: `local_${Date.now()}`,
+      videoId: id,
+      authorId: auth.profile?.id ?? "user_me",
+      authorHandle: auth.profile?.handle ?? "you",
+      authorDisplayName: "You",
+      isCreator: false,
+      isSubscriber: false,
+      text,
+      likeCount: 0,
+      replyCount: 0,
+      createdAt: new Date().toISOString()
+    };
+    setComments((current) => [optimistic, ...current]);
     setDraft("");
+    if (isApiConfigured()) {
+      try {
+        await apiFetch(`/videos/${id}/comments`, { method: "POST", body: JSON.stringify({ text }) });
+        void load();
+      } catch (submitError) {
+        setComments((current) => current.filter((comment) => comment.id !== optimistic.id));
+        setError(submitError instanceof Error ? submitError.message : "Could not post the comment");
+      }
+    }
+  };
+
+  const deleteComment = async (commentId: string) => {
+    setComments((current) => current.filter((comment) => comment.id !== commentId));
+    if (isApiConfigured() && !commentId.startsWith("local_")) {
+      apiFetch(`/comments/${commentId}`, { method: "DELETE" }).catch(() => void load());
+    }
   };
 
   return (
-    <ModalShell title="Comments" subtitle={`${topLevel.length + localComments.length} comments`}>
+    <ModalShell title="Comments" subtitle={`${topLevel.length} comments${isLive ? "" : " · demo data"}`}>
       <View style={styles.composer}>
         <TextInput
           style={styles.input}
@@ -124,11 +228,19 @@ export default function CommentSheet() {
           <Text style={styles.sendText}>Post</Text>
         </Pressable>
       </View>
-      {localComments.map((comment) => (
-        <CommentRow key={comment.id} comment={comment} replies={[]} />
-      ))}
+      {error ? <Text style={styles.errorText}>{error}</Text> : null}
+      {loading && comments.length === 0 ? <ActivityIndicator color={colors.primary} style={{ marginTop: 24 }} /> : null}
+      {!loading && topLevel.length === 0 ? (
+        <Text style={styles.emptyText}>No comments yet — start the conversation.</Text>
+      ) : null}
       {topLevel.map((comment) => (
-        <CommentRow key={comment.id} comment={comment} replies={repliesByParent.get(comment.id) ?? []} />
+        <CommentRow
+          key={comment.id}
+          comment={comment}
+          replies={repliesByParent.get(comment.id) ?? []}
+          ownProfileId={auth.profile?.id}
+          onDelete={deleteComment}
+        />
       ))}
     </ModalShell>
   );
@@ -162,5 +274,7 @@ const styles = StyleSheet.create({
   text: { color: colors.text, lineHeight: 20 },
   actions: { flexDirection: "row", gap: spacing.md, marginTop: 4 },
   action: { color: colors.textMuted, fontSize: 12, fontWeight: "800" },
-  actionActive: { color: colors.secondary }
+  actionActive: { color: colors.secondary },
+  errorText: { color: colors.danger, fontSize: 13, marginBottom: spacing.md },
+  emptyText: { color: colors.textMuted, textAlign: "center", marginTop: spacing.xl }
 });

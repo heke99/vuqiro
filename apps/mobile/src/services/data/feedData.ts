@@ -1,11 +1,14 @@
-import { useEffect, useState } from "react";
-import { mockCreators, mockVideos } from "@vuqiro/mock-data";
-import type { Creator, Video } from "@vuqiro/types";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { mockCreators, mockServedAds, mockVideos } from "@vuqiro/mock-data";
+import type { Creator, ServedAd, Video } from "@vuqiro/types";
 import { apiFetch, isApiConfigured } from "../api/client";
 
-export type FeedEntry = { video: Video; creator: Creator };
+export type FeedEntry =
+  | { kind: "video"; video: Video; creator: Creator }
+  | { kind: "ad"; ad: ServedAd };
 
 type FeedItemDto = {
+  kind?: "video" | "ad";
   id: string;
   creatorId: string;
   creatorHandle: string;
@@ -28,8 +31,11 @@ type FeedItemDto = {
   createdAt?: string;
 };
 
+type FeedResponseItem = FeedItemDto | (ServedAd & { kind: "ad" });
+
 function dtoToEntry(dto: FeedItemDto): FeedEntry {
   return {
+    kind: "video",
     video: {
       id: dto.id,
       creatorId: dto.creatorId,
@@ -66,55 +72,107 @@ function dtoToEntry(dto: FeedItemDto): FeedEntry {
   };
 }
 
+function responseItemToEntry(item: FeedResponseItem): FeedEntry {
+  if ((item as { kind?: string }).kind === "ad") {
+    return { kind: "ad", ad: item as ServedAd };
+  }
+  return dtoToEntry(item as FeedItemDto);
+}
+
+const MOCK_AD_FREQUENCY = 6;
+
+/** Deterministic mock feed with sponsored cards interleaved (dev/test only). */
 export function mockFeedEntries(): FeedEntry[] {
-  return mockVideos.map((video) => ({
-    video,
-    creator: mockCreators.find((candidate) => candidate.id === video.creatorId) ?? mockCreators[0]
-  }));
+  const entries: FeedEntry[] = [];
+  let adIndex = 0;
+  mockVideos.forEach((video, index) => {
+    entries.push({
+      kind: "video",
+      video,
+      creator: mockCreators.find((candidate) => candidate.id === video.creatorId) ?? mockCreators[0]
+    });
+    if ((index + 1) % MOCK_AD_FREQUENCY === 0 && mockServedAds.length > 0) {
+      entries.push({ kind: "ad", ad: mockServedAds[adIndex % mockServedAds.length] });
+      adIndex += 1;
+    }
+  });
+  return entries;
 }
 
 /**
- * Loads a feed from the API when configured, otherwise from mock data.
- * Falls back to mocks on request failure so the feed never dies.
+ * Loads a feed from the API when configured (cursor-paginated, with
+ * server-inserted sponsored entries), otherwise from mock data.
  */
 export function useFeed(tab: "for_you" | "following"): {
   entries: FeedEntry[];
   isLive: boolean;
+  loading: boolean;
+  hasMore: boolean;
+  loadMore: () => void;
   reload: () => void;
 } {
   const [entries, setEntries] = useState<FeedEntry[]>([]);
   const [isLive, setIsLive] = useState(false);
+  const [loading, setLoading] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
+  const cursorRef = useRef<string | null>(null);
+  const [hasMore, setHasMore] = useState(true);
+  const loadingRef = useRef(false);
 
-  useEffect(() => {
-    let cancelled = false;
-    async function load() {
+  const fetchPage = useCallback(
+    async (cursor: string | null, append: boolean) => {
       if (!isApiConfigured()) {
-        if (!cancelled) {
-          setEntries([]);
-          setIsLive(false);
-        }
+        setEntries([]);
+        setIsLive(false);
+        setHasMore(false);
         return;
       }
+      if (loadingRef.current) return;
+      loadingRef.current = true;
+      setLoading(true);
       try {
         const path = tab === "for_you" ? "/feed/for-you" : "/feed/following";
-        const response = await apiFetch<{ items: FeedItemDto[]; source: string }>(path);
-        if (!cancelled) {
-          setEntries(response.items.map(dtoToEntry));
-          setIsLive(response.source === "db");
-        }
+        const query = cursor ? `?cursor=${encodeURIComponent(cursor)}` : "";
+        const response = await apiFetch<{ items: FeedResponseItem[]; nextCursor?: string | null; source: string }>(
+          `${path}${query}`
+        );
+        const mapped = response.items.map(responseItemToEntry);
+        setEntries((current) => (append ? [...current, ...mapped] : mapped));
+        setIsLive(response.source === "db");
+        cursorRef.current = response.nextCursor ?? null;
+        setHasMore(Boolean(response.nextCursor));
       } catch {
-        if (!cancelled) {
+        if (!append) {
           setEntries([]);
           setIsLive(false);
         }
+        setHasMore(false);
+      } finally {
+        loadingRef.current = false;
+        setLoading(false);
       }
-    }
-    load();
-    return () => {
-      cancelled = true;
-    };
-  }, [tab, reloadKey]);
+    },
+    [tab]
+  );
 
-  return { entries, isLive, reload: () => setReloadKey((key) => key + 1) };
+  useEffect(() => {
+    cursorRef.current = null;
+    setHasMore(true);
+    fetchPage(null, false);
+  }, [fetchPage, reloadKey]);
+
+  const loadMore = useCallback(() => {
+    if (cursorRef.current && !loadingRef.current) {
+      fetchPage(cursorRef.current, true);
+    }
+  }, [fetchPage]);
+
+  return {
+    entries,
+    isLive,
+    loading,
+    hasMore,
+    loadMore,
+    reload: () => setReloadKey((key) => key + 1)
+  };
 }
