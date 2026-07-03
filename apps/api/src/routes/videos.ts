@@ -139,6 +139,30 @@ videoRoutes.post("/:id/save", requireUser, async (c) => {
   return c.json({ saved, source: "db" });
 });
 
+const shareBody = z.object({
+  channel: z.enum(["copy_link", "system_sheet", "direct_message", "external"]).default("system_sheet")
+});
+
+/** Record a share (updates the video's share counter via trigger). */
+videoRoutes.post("/:id/share", async (c) => {
+  const id = idParam.parse(c.req.param("id"));
+  const profile = c.get("profile");
+  enforceRateLimit(`share:${profile?.id ?? "anon"}`, 60, 60_000);
+  const body = shareBody.parse(await c.req.json().catch(() => ({})));
+
+  if (!isBackendConfigured()) {
+    return c.json({ shared: true, shareUrl: `https://vuqiro.app/v/${id}`, source: "mock" }, 201);
+  }
+  const db = getServiceDb()!;
+  const { data: video } = await db.from("videos").select("id, share_count").eq("id", id).maybeSingle();
+  if (!video) throw notFound("Video not found");
+  const { error } = await db
+    .from("shares")
+    .insert({ video_id: id, profile_id: profile?.id ?? null, channel: body.channel });
+  if (error) throw badRequest(error.message);
+  return c.json({ shared: true, shareUrl: `https://vuqiro.app/v/${id}`, shareCount: video.share_count + 1, source: "db" }, 201);
+});
+
 videoRoutes.get("/:id/comments", async (c) => {
   const id = idParam.parse(c.req.param("id"));
 

@@ -129,3 +129,79 @@ notificationRoutes.post("/notifications/preferences", requireUser, async (c) => 
   if (error) throw badRequest(error.message);
   return c.json({ ok: true, source: "db" });
 });
+
+const pushTokenBody = z.object({
+  token: z.string().min(8).max(256),
+  platform: z.enum(["ios", "android", "web"]),
+  installId: z.string().max(120).optional(),
+  deviceModel: z.string().max(120).optional(),
+  osVersion: z.string().max(60).optional(),
+  appVersion: z.string().max(40).optional()
+});
+
+/** Register (or refresh) a device push token. */
+notificationRoutes.post("/notifications/push-token", requireUser, async (c) => {
+  const profile = c.get("profile")!;
+  const body = pushTokenBody.parse(await c.req.json());
+
+  if (!isBackendConfigured()) {
+    return c.json({ registered: true, source: "mock" }, 201);
+  }
+
+  const db = getServiceDb()!;
+  let deviceId: string | null = null;
+  if (body.installId) {
+    const { data: device } = await db
+      .from("user_devices")
+      .upsert(
+        {
+          profile_id: profile.id,
+          install_id: body.installId,
+          platform: body.platform,
+          device_model: body.deviceModel ?? "",
+          os_version: body.osVersion ?? "",
+          app_version: body.appVersion ?? "",
+          last_seen_at: new Date().toISOString()
+        },
+        { onConflict: "profile_id,install_id" }
+      )
+      .select("id")
+      .single();
+    deviceId = device?.id ?? null;
+  }
+
+  const { error } = await db.from("push_tokens").upsert(
+    {
+      profile_id: profile.id,
+      device_id: deviceId,
+      token: body.token,
+      platform: body.platform,
+      is_active: true
+    },
+    { onConflict: "token" }
+  );
+  if (error) throw badRequest(error.message);
+
+  await db.from("notification_preferences").upsert(
+    { profile_id: profile.id, push_enabled: true, push_token: body.token },
+    { onConflict: "profile_id" }
+  );
+  return c.json({ registered: true, source: "db" }, 201);
+});
+
+/** Deactivate a push token (logout / permission revoked). */
+notificationRoutes.delete("/notifications/push-token", requireUser, async (c) => {
+  const profile = c.get("profile")!;
+  const body = z.object({ token: z.string().min(8).max(256) }).parse(await c.req.json());
+  if (!isBackendConfigured()) {
+    return c.json({ removed: true, source: "mock" });
+  }
+  const db = getServiceDb()!;
+  const { error } = await db
+    .from("push_tokens")
+    .update({ is_active: false })
+    .eq("profile_id", profile.id)
+    .eq("token", body.token);
+  if (error) throw badRequest(error.message);
+  return c.json({ removed: true, source: "db" });
+});

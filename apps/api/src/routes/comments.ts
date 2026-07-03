@@ -64,3 +64,48 @@ commentRoutes.post("/:id/replies", requireUser, async (c) => {
 
   return c.json({ comment: data, source: "db" }, 201);
 });
+
+/** Toggle a like on a comment (idempotent). */
+commentRoutes.post("/:id/like", requireUser, async (c) => {
+  const commentId = z.string().min(1).max(64).parse(c.req.param("id"));
+  const profile = c.get("profile")!;
+  enforceRateLimit(`comment-like:${profile.id}`, 120, 60_000);
+
+  if (!isBackendConfigured()) {
+    return c.json({ liked: true, source: "mock" });
+  }
+  const db = getServiceDb()!;
+  const { data: comment } = await db.from("comments").select("id").eq("id", commentId).maybeSingle();
+  if (!comment) throw notFound("Comment not found");
+
+  const { data: existing } = await db
+    .from("comment_likes")
+    .select("id")
+    .eq("profile_id", profile.id)
+    .eq("comment_id", commentId)
+    .maybeSingle();
+  if (existing) {
+    await db.from("comment_likes").delete().eq("id", existing.id);
+    return c.json({ liked: false, source: "db" });
+  }
+  const { error } = await db.from("comment_likes").insert({ profile_id: profile.id, comment_id: commentId });
+  if (error) throw badRequest(error.message);
+  return c.json({ liked: true, source: "db" });
+});
+
+/** Delete the caller's own comment. */
+commentRoutes.delete("/:id", requireUser, async (c) => {
+  const commentId = z.string().min(1).max(64).parse(c.req.param("id"));
+  const profile = c.get("profile")!;
+
+  if (!isBackendConfigured()) {
+    return c.json({ deleted: true, source: "mock" });
+  }
+  const db = getServiceDb()!;
+  const { data: comment } = await db.from("comments").select("id, author_id").eq("id", commentId).maybeSingle();
+  if (!comment) throw notFound("Comment not found");
+  if (comment.author_id !== profile.id) throw notFound("Comment not found");
+  const { error } = await db.from("comments").delete().eq("id", commentId);
+  if (error) throw badRequest(error.message);
+  return c.json({ deleted: true, source: "db" });
+});

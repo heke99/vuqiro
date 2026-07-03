@@ -12,3 +12,6 @@ export * from "./analytics";
 export * from "./legal";
 export * from "./payouts";
 export * from "./audit";
+export * from "./ads";
+export * from "./privacy";
+export * from "./ops";

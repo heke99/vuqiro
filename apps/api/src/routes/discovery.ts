@@ -214,6 +214,61 @@ discoveryRoutes.get("/discover/trending", async (c) => {
   });
 });
 
+/** Content categories (normalized taxonomy). */
+discoveryRoutes.get("/categories", async (c) => {
+  if (!isBackendConfigured()) {
+    const categories = [...new Set(mockVideos.map((video) => video.category).filter(Boolean))].map((label, index) => ({
+      id: `mock_cat_${index}`,
+      slug: String(label).toLowerCase().replace(/\s+/g, "-"),
+      label,
+      isActive: true
+    }));
+    return c.json({ categories, source: "mock" });
+  }
+  const db = getServiceDb()!;
+  const { data, error } = await db
+    .from("categories")
+    .select("id, slug, label, description, sort_order, is_active")
+    .eq("is_active", true)
+    .order("sort_order");
+  if (error) throw badRequest(error.message);
+  return c.json({ categories: data ?? [], source: "db" });
+});
+
+/** Sounds: search + trending by usage. */
+discoveryRoutes.get("/sounds", async (c) => {
+  const term = (c.req.query("q") ?? "").trim().toLowerCase();
+  if (!isBackendConfigured()) {
+    const sounds = [
+      { id: "mock_sound_1", title: "Golden Hour Loop", artistName: "Vuqiro Library", videoCount: 128 },
+      { id: "mock_sound_2", title: "City Nights", artistName: "Vuqiro Library", videoCount: 86 },
+      { id: "mock_sound_3", title: "Kitchen Rhythm", artistName: "Sola", videoCount: 42 }
+    ].filter((sound) => !term || sound.title.toLowerCase().includes(term));
+    return c.json({ sounds, source: "mock" });
+  }
+  const db = getServiceDb()!;
+  let query = db
+    .from("sounds")
+    .select("id, title, artist_name, audio_url, duration_seconds, video_count")
+    .eq("is_blocked", false)
+    .order("video_count", { ascending: false })
+    .limit(50);
+  if (term) query = query.ilike("title", `%${term}%`);
+  const { data, error } = await query;
+  if (error) throw badRequest(error.message);
+  return c.json({
+    sounds: (data ?? []).map((row) => ({
+      id: row.id,
+      title: row.title,
+      artistName: row.artist_name,
+      audioUrl: row.audio_url ?? undefined,
+      durationSeconds: row.duration_seconds ?? undefined,
+      videoCount: row.video_count
+    })),
+    source: "db"
+  });
+});
+
 /** A creator's public storefront feed. Locked items are metadata-only. */
 discoveryRoutes.get("/creators/:id/videos", async (c) => {
   const id = z.string().min(1).max(64).parse(c.req.param("id"));
