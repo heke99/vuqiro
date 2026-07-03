@@ -1,3 +1,4 @@
+import type { ProviderHealth } from "../health/providerHealth";
 import type {
   CreateDirectUploadParams,
   DirectUpload,
@@ -50,5 +51,9 @@ export class MockVideoProvider implements VideoProvider {
   verifyWebhookSignature(_rawBody: string, _signatureHeader: string | undefined): VideoWebhookVerification {
     // Mock provider trusts local webhooks; the real provider must verify.
     return { valid: true };
+  }
+
+  async healthCheck(): Promise<ProviderHealth> {
+    return { provider: "video", status: "mock", message: "Mock video provider (development/test only)" };
   }
 }

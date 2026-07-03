@@ -1,7 +1,9 @@
 import { Hono } from "hono";
+import { cors } from "hono/cors";
 import { ZodError } from "zod";
 import { loadEnv } from "@vuqiro/config";
 import { ApiError } from "./lib/errors";
+import { getHealthReport } from "./lib/health";
 import type { AppEnv } from "./middleware/auth";
 import { requestLogger, securityHeaders } from "./middleware/logging";
 import { adminRoutes } from "./routes/admin";
@@ -34,6 +36,20 @@ export function createApp() {
     app.use("*", requestLogger);
   }
   app.use("*", securityHeaders);
+  app.use(
+    "*",
+    cors({
+      origin:
+        env.corsOrigins.length > 0
+          ? env.corsOrigins
+          : env.appEnv === "production"
+            ? [] // production requires an explicit allowlist
+            : (origin) => origin, // dev/test: reflect any origin
+      allowHeaders: ["authorization", "content-type", "x-request-id", "x-mock-user", "x-mock-admin"],
+      allowMethods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+      maxAge: 600
+    })
+  );
 
   app.onError((error, c) => {
     if (error instanceof ApiError) {
@@ -46,15 +62,11 @@ export function createApp() {
     return c.json({ error: "Internal server error" }, 500);
   });
 
-  app.get("/health", (c) =>
-    c.json({
-      ok: true,
-      service: "vuqiro-api",
-      appEnv: env.appEnv,
-      videoProvider: env.videoProvider,
-      time: new Date().toISOString()
-    })
-  );
+  app.get("/health", async (c) => {
+    const deep = c.req.query("deep") === "1";
+    const report = await getHealthReport({ deep });
+    return c.json({ ...report, videoProvider: env.videoProvider }, report.ok ? 200 : 503);
+  });
 
   app.route("/feed", feedRoutes);
   // Studio routes must precede discovery: /creators/me/* would otherwise be

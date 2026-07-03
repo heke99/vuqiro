@@ -2,6 +2,7 @@
  * Creator payout adapter contract (Stripe Connect first).
  * All payout mutations are server-side and audit-logged.
  */
+import type { ProviderHealth } from "../health/providerHealth";
 
 export type ConnectAccountStatus =
   | "not_onboarded"
@@ -34,4 +35,5 @@ export interface PayoutsProvider {
   getAccountSummary(accountId: string): Promise<ConnectAccountSummary>;
   createTransfer(accountId: string, amountCents: number, currency: string, idempotencyKey: string): Promise<TransferResult>;
   verifyWebhookSignature(rawBody: string, signatureHeader: string | undefined): { valid: boolean; reason?: string };
+  healthCheck(): Promise<ProviderHealth>;
 }

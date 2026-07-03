@@ -1,3 +1,4 @@
+import type { ProviderHealth } from "../health/providerHealth";
 import type {
   ConnectAccountSummary,
   ConnectOnboardingLink,
@@ -67,5 +68,9 @@ export class MockPayoutsProvider implements PayoutsProvider {
 
   verifyWebhookSignature(_rawBody: string, _signatureHeader: string | undefined): { valid: boolean; reason?: string } {
     return { valid: true };
+  }
+
+  async healthCheck(): Promise<ProviderHealth> {
+    return { provider: "payouts", status: "mock", message: "Mock payouts provider (development/test only)" };
   }
 }

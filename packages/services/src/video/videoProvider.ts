@@ -5,6 +5,7 @@
  * the product can run with a mock implementation before credentials exist,
  * and switch providers without touching product code.
  */
+import type { ProviderHealth } from "../health/providerHealth";
 
 export type VideoAssetStatus =
   | "waiting_for_upload"
@@ -48,4 +49,5 @@ export interface VideoProvider {
   deleteAsset(assetId: string): Promise<void>;
   /** Verify a webhook signature before trusting the payload. */
   verifyWebhookSignature(rawBody: string, signatureHeader: string | undefined): VideoWebhookVerification;
+  healthCheck(): Promise<ProviderHealth>;
 }

@@ -35,13 +35,36 @@ videoWebhookRoutes.post("/video-provider/webhook", async (c) => {
     throw unauthorized(verification.reason ?? "Invalid webhook signature");
   }
 
-  const event = JSON.parse(rawBody) as MuxWebhookEvent;
+  const event = JSON.parse(rawBody) as MuxWebhookEvent & { id?: string };
 
   if (!isBackendConfigured()) {
     return c.json({ received: true, processed: false, reason: "backend not configured" });
   }
 
   const db = getServiceDb()!;
+
+  // Idempotency: each provider event is recorded once in
+  // video_processing_jobs; replays are acknowledged without reprocessing.
+  const providerEventId = event.id ?? `${event.type}:${event.data?.id ?? "unknown"}`;
+  const videoIdForJob =
+    event.data?.passthrough && /^[0-9a-f-]{36}$/i.test(event.data.passthrough) ? event.data.passthrough : null;
+  if (videoIdForJob) {
+    const { error: jobError } = await db.from("video_processing_jobs").insert({
+      video_id: videoIdForJob,
+      provider: provider.name,
+      provider_event_id: providerEventId,
+      type: "webhook",
+      status: "processing",
+      payload: { type: event.type }
+    });
+    if (jobError) {
+      if (jobError.code === "23505") {
+        return c.json({ received: true, duplicate: true, type: event.type });
+      }
+      // Non-duplicate insert failures should not drop the event; continue.
+      console.error("[video-webhook] failed to record processing job", jobError.message);
+    }
+  }
 
   switch (event.type) {
     case "video.upload.asset_created": {
@@ -118,6 +141,14 @@ videoWebhookRoutes.post("/video-provider/webhook", async (c) => {
     default:
       // Unhandled event types are acknowledged so Mux stops retrying.
       break;
+  }
+
+  if (videoIdForJob) {
+    await db
+      .from("video_processing_jobs")
+      .update({ status: "succeeded" })
+      .eq("provider", provider.name)
+      .eq("provider_event_id", providerEventId);
   }
 
   return c.json({ received: true, type: event.type });
