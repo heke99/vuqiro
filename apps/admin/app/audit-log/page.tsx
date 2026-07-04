@@ -1,36 +1,38 @@
-import { AdminPageHeader, AdminStatusBadge, AdminTable } from "@vuqiro/ui/admin";
-import { mockAuditLogs } from "@vuqiro/mock-data";
-import type { AuditLogEntry } from "@vuqiro/types";
+import { AdminPageHeader, AdminTable } from "@vuqiro/ui/admin";
+import { ErrorBanner, guardPage } from "../../components/PageGuard";
+import { adminApiFetch } from "../../lib/adminApi";
+import { fieldDate, fieldStr, type Row } from "../../lib/rows";
 
-export default function AuditLogPage() {
+export default async function AuditLogPage() {
+  const { denied } = await guardPage("/audit-log");
+  if (denied) return denied;
+  const result = await adminApiFetch<{ logs: Row[] }>("/admin/audit-logs?limit=200");
+
   return (
     <>
       <AdminPageHeader
         kicker="Platform"
         title="Audit log"
-        copy="Immutable record of every superadmin, moderation and payout action. Entries cannot be edited or deleted."
+        copy="Append-only trail of every sensitive admin action. Entries can never be edited or deleted."
       />
-      <AdminTable<AuditLogEntry>
-        columns={[
-          { key: "id", header: "Entry", render: (entry) => <strong>{entry.id}</strong> },
-          { key: "action", header: "Action", render: (entry) => <AdminStatusBadge status={entry.action} tone="primary" /> },
-          {
-            key: "actor",
-            header: "Actor",
-            render: (entry) => (
-              <>
-                {entry.actorId}
-                <br />
-                {entry.actorRole}
-              </>
-            )
-          },
-          { key: "target", header: "Target", render: (entry) => `${entry.targetType}: ${entry.targetId}` },
-          { key: "summary", header: "Summary", render: (entry) => entry.summary },
-          { key: "created", header: "When", render: (entry) => new Date(entry.createdAt).toLocaleString() }
-        ]}
-        rows={[...mockAuditLogs].sort((a, b) => b.createdAt.localeCompare(a.createdAt))}
-      />
+      {!result.ok ? <ErrorBanner message={result.error} /> : null}
+      {result.ok && result.data.logs.length === 0 ? <div className="empty-state">No audit entries.</div> : null}
+      {result.ok && result.data.logs.length > 0 ? (
+        <AdminTable<Row>
+          columns={[
+            { key: "action", header: "Action", render: (log) => <strong>{fieldStr(log, "action")}</strong> },
+            {
+              key: "target",
+              header: "Target",
+              render: (log) => `${fieldStr(log, "target_type", "targetType")}: ${fieldStr(log, "target_id", "targetId").slice(0, 18)}`
+            },
+            { key: "summary", header: "Summary", render: (log) => fieldStr(log, "summary").slice(0, 120) },
+            { key: "role", header: "Actor role", render: (log) => fieldStr(log, "actor_role", "actorRole") },
+            { key: "when", header: "When", render: (log) => fieldDate(log, "created_at", "createdAt") }
+          ]}
+          rows={result.data.logs}
+        />
+      ) : null}
     </>
   );
 }

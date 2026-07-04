@@ -1,22 +1,65 @@
 import { useRouter } from "expo-router";
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
-import { mockWalletTransactions } from "@vuqiro/mock-data";
+import { mockWallet, mockWalletTransactions } from "@vuqiro/mock-data";
+import type { WalletTransaction } from "@vuqiro/types";
 import { Card } from "../../components/Card";
 import { CoinPackCard } from "../../components/CoinPackCard";
 import { Screen } from "../../components/Screen";
+import { apiFetch, isApiConfigured } from "../../services/api/client";
 import { colors, spacing } from "../../design/theme";
+
+type WalletResponse = {
+  wallet?: { coinBalance?: number; coin_balance?: number };
+  transactions?: (WalletTransaction | { id: string; label?: string; type?: string; amount: number })[];
+  source: string;
+};
 
 export function WalletScreen() {
   const router = useRouter();
+  const [balance, setBalance] = useState<number>(mockWallet.coinBalance);
+  const [transactions, setTransactions] = useState<{ id: string; label: string; amount: number }[]>(
+    mockWalletTransactions.map((tx) => ({ id: tx.id, label: tx.label, amount: tx.amount }))
+  );
+  const [isLive, setIsLive] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      if (!isApiConfigured()) return;
+      try {
+        const response = await apiFetch<WalletResponse>("/wallet");
+        if (cancelled) return;
+        const coinBalance = response.wallet?.coinBalance ?? response.wallet?.coin_balance;
+        if (typeof coinBalance === "number") setBalance(coinBalance);
+        if (response.transactions) {
+          setTransactions(
+            response.transactions.map((tx) => ({
+              id: String(tx.id),
+              label: ("label" in tx && tx.label) || ("type" in tx && tx.type) || "Transaction",
+              amount: tx.amount
+            }))
+          );
+        }
+        setIsLive(response.source === "db");
+      } catch {
+        // keep the demo wallet visible
+      }
+    }
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const onBuy = () => router.push("/modals/coins");
   return (
     <Screen>
       <Text style={styles.kicker}>Wallet</Text>
       <Text style={styles.title}>Your coins</Text>
       <Card style={styles.balanceCard}>
-        <Text style={styles.balance}>1,250</Text>
-        <Text style={styles.balanceLabel}>Available coins</Text>
+        <Text style={styles.balance}>{balance.toLocaleString()}</Text>
+        <Text style={styles.balanceLabel}>Available coins{isLive ? "" : " (demo)"}</Text>
         <Text style={styles.note}>Use coins to support creators, unlock videos and boost content.</Text>
       </Card>
       <Text style={styles.sectionTitle}>Coin packs</Text>
@@ -27,10 +70,14 @@ export function WalletScreen() {
         <CoinPackCard coins={5000} bonus={700} price="$49.99" onPress={onBuy} />
       </View>
       <Text style={styles.sectionTitle}>Recent activity</Text>
-      {mockWalletTransactions.map((tx) => (
+      {transactions.length === 0 ? <Text style={styles.note}>No transactions yet.</Text> : null}
+      {transactions.map((tx) => (
         <Card key={tx.id} style={styles.txn}>
           <Text style={styles.txnLabel}>{tx.label}</Text>
-          <Text style={[styles.txnAmount, tx.amount < 0 && styles.negative]}>{tx.amount > 0 ? "+" : ""}{tx.amount}</Text>
+          <Text style={[styles.txnAmount, tx.amount < 0 && styles.negative]}>
+            {tx.amount > 0 ? "+" : ""}
+            {tx.amount}
+          </Text>
         </Card>
       ))}
     </Screen>

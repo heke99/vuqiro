@@ -131,5 +131,79 @@ end
 \$\$;
 "
 
+echo "==> 99-completion schema assertions"
+run_sql "$DB_NAME" "
+do \$\$
+declare
+  v_profile uuid;
+  v_video uuid;
+  v_creator_profile uuid;
+  v_before integer;
+  v_after integer;
+  v_ledger uuid;
+begin
+  -- Role helpers exist.
+  if to_regprocedure('public.has_admin_role(text)') is null then
+    raise exception 'has_admin_role(text) missing';
+  end if;
+  if to_regprocedure('public.is_platform_superadmin()') is null then
+    raise exception 'is_platform_superadmin() missing';
+  end if;
+
+  -- Required new tables exist.
+  perform 1 from pg_tables where schemaname = 'public' and tablename in (
+    'ad_campaigns','ad_creatives','ad_impressions','direct_sponsorship_deals',
+    'platform_revenue_ledger','privacy_requests','data_exports','consent_events',
+    'appeals','copyright_claims','platform_settings','integration_health_checks',
+    'feed_sessions','feed_impressions','hashtags','sounds','shares',
+    'video_upload_sessions','push_tokens','profile_settings'
+  ) having count(*) = 20;
+  if not found then
+    raise exception 'expected 99-completion tables are missing';
+  end if;
+
+  -- Counter triggers: a like increments videos.like_count.
+  select id into v_profile from public.profiles where handle = 'vuqiro_viewer';
+  select id into v_video from public.videos order by created_at limit 1;
+  select like_count into v_before from public.videos where id = v_video;
+  insert into public.likes (profile_id, video_id) values (v_profile, v_video);
+  select like_count into v_after from public.videos where id = v_video;
+  if v_after <> v_before + 1 then
+    raise exception 'like counter trigger did not increment (% -> %)', v_before, v_after;
+  end if;
+  delete from public.likes where profile_id = v_profile and video_id = v_video;
+  select like_count into v_after from public.videos where id = v_video;
+  if v_after <> v_before then
+    raise exception 'like counter trigger did not decrement (% -> %)', v_before, v_after;
+  end if;
+
+  -- Share counter increments.
+  select share_count into v_before from public.videos where id = v_video;
+  insert into public.shares (video_id, profile_id, channel) values (v_video, v_profile, 'copy_link');
+  select share_count into v_after from public.videos where id = v_video;
+  if v_after <> v_before + 1 then
+    raise exception 'share counter trigger did not increment';
+  end if;
+
+  -- Platform revenue ledger is append-only.
+  insert into public.platform_revenue_ledger (source, amount_cents, description)
+  values ('sponsorship', 100000, 'validation row') returning id into v_ledger;
+  begin
+    update public.platform_revenue_ledger set amount_cents = 1 where id = v_ledger;
+    raise exception 'platform_revenue_ledger update was not blocked';
+  exception
+    when others then
+      if sqlerrm like '%append-only%' then null; else raise; end if;
+  end;
+
+  raise notice '99-completion schema assertions passed';
+end
+\$\$;
+"
+
 TABLE_COUNT=$("$PSQL" -t -A -d "$DB_NAME" -c "select count(*) from pg_tables where schemaname='public'")
+if [ "$TABLE_COUNT" -lt 89 ]; then
+  echo "ERROR: expected at least 89 public tables, found $TABLE_COUNT" >&2
+  exit 1
+fi
 echo "==> OK: migrations applied cleanly. public tables: $TABLE_COUNT (all with RLS enabled)"

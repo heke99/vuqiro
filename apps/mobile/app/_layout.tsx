@@ -78,10 +78,15 @@ export default function RootLayout() {
       >
         <Stack.Screen name="index" />
         <Stack.Screen name="(public)" />
+        <Stack.Screen name="(onboarding)" />
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="creator/[id]" />
         <Stack.Screen name="video/[id]" />
         <Stack.Screen name="settings" />
+        <Stack.Screen name="account-status" />
+        <Stack.Screen name="edit-profile" />
+        <Stack.Screen name="blocked-users" />
+        <Stack.Screen name="privacy-settings" />
         <Stack.Screen name="legal/terms" />
         <Stack.Screen name="legal/privacy" />
         <Stack.Screen name="legal/community-guidelines" />
@@ -93,6 +98,7 @@ export default function RootLayout() {
         <Stack.Screen name="modals/comment-sheet" options={{ presentation: "modal" }} />
         <Stack.Screen name="modals/share-sheet" options={{ presentation: "modal" }} />
         <Stack.Screen name="modals/locked-content" options={{ presentation: "modal" }} />
+        <Stack.Screen name="modals/report-ad" options={{ presentation: "modal" }} />
           </Stack>
         </SocialProvider>
       </AuthProvider>

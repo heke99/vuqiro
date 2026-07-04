@@ -1,9 +1,10 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
-import React from "react";
+import React, { useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { mockCreators, mockVideos } from "@vuqiro/mock-data";
 import { Button } from "../../src/components/Button";
 import { ModalShell } from "../../src/components/ModalShell";
+import { apiFetch, isApiConfigured } from "../../src/services/api/client";
 import { colors, radii, spacing } from "../../src/design/theme";
 
 export default function LockedContentModal() {
@@ -12,6 +13,40 @@ export default function LockedContentModal() {
   const video = mockVideos.find((item) => item.id === videoId) ?? mockVideos[1];
   const creator = mockCreators.find((item) => item.id === video.creatorId) ?? mockCreators[0];
   const isCoinUnlock = video.visibility === "unlock_with_coins";
+  const [state, setState] = useState<"idle" | "busy" | "unlocked" | "error">("idle");
+  const [error, setError] = useState<string | null>(null);
+
+  const unlock = async () => {
+    const id = videoId ?? video.id;
+    setState("busy");
+    setError(null);
+    if (!isApiConfigured()) {
+      setState("error");
+      setError("Demo mode — unlocks activate when the API is configured.");
+      return;
+    }
+    try {
+      await apiFetch("/wallet/unlock", {
+        method: "POST",
+        body: JSON.stringify({ videoId: id, idempotencyKey: `unlock-${id}-${Date.now()}` })
+      });
+      setState("unlocked");
+    } catch (unlockError) {
+      setState("error");
+      setError(unlockError instanceof Error ? unlockError.message : "Unlock failed.");
+    }
+  };
+
+  if (state === "unlocked") {
+    return (
+      <ModalShell title="Unlocked!" closeLabel="Watch now">
+        <Text style={styles.optionCopy}>
+          You now have permanent access to this video. Your coins went to {creator.displayName} (minus the platform
+          fee).
+        </Text>
+      </ModalShell>
+    );
+  }
 
   return (
     <ModalShell
@@ -26,10 +61,13 @@ export default function LockedContentModal() {
         <View style={styles.option}>
           <Text style={styles.optionTitle}>Unlock with coins</Text>
           <Text style={styles.optionCopy}>
-            Pay {video.coinUnlockPrice} coins once and watch this video forever. Your current
-            balance: 1,250 coins.
+            Pay {video.coinUnlockPrice} coins once and watch this video forever.
           </Text>
-          <Button label={`Unlock for ${video.coinUnlockPrice} coins`} />
+          {error ? <Text style={styles.error}>{error}</Text> : null}
+          <Button
+            label={state === "busy" ? "Unlocking…" : `Unlock for ${video.coinUnlockPrice} coins`}
+            onPress={unlock}
+          />
           <Button
             label="Get more coins"
             variant="ghost"
@@ -75,5 +113,6 @@ const styles = StyleSheet.create({
   option: { gap: spacing.sm },
   optionTitle: { color: colors.text, fontWeight: "900", fontSize: 18 },
   optionCopy: { color: colors.textSoft, lineHeight: 20, marginBottom: spacing.xs },
+  error: { color: colors.danger, fontSize: 13 },
   note: { color: colors.textMuted, fontSize: 12, lineHeight: 18, marginTop: spacing.lg }
 });

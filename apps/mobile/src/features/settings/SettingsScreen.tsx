@@ -47,11 +47,27 @@ export function SettingsScreen() {
         </Pressable>
       ))}
 
-      <Text style={styles.sectionTitle}>Privacy</Text>
-      <Card style={styles.row}>
-        <Text style={styles.link}>Blocked accounts</Text>
-        <Text style={styles.supportEmail}>{blockedCount}</Text>
-      </Card>
+      <Text style={styles.sectionTitle}>Account</Text>
+      <Pressable onPress={() => router.push("/edit-profile")}>
+        <Card style={styles.row}>
+          <Text style={styles.link}>Edit profile</Text>
+          <Text style={styles.chevron}>›</Text>
+        </Card>
+      </Pressable>
+
+      <Text style={styles.sectionTitle}>Privacy & safety</Text>
+      <Pressable onPress={() => router.push("/privacy-settings")}>
+        <Card style={styles.row}>
+          <Text style={styles.link}>Privacy, safety & data</Text>
+          <Text style={styles.chevron}>›</Text>
+        </Card>
+      </Pressable>
+      <Pressable onPress={() => router.push("/blocked-users")}>
+        <Card style={styles.row}>
+          <Text style={styles.link}>Blocked accounts</Text>
+          <Text style={styles.supportEmail}>{blockedCount}</Text>
+        </Card>
+      </Pressable>
       <Pressable onPress={() => router.push("/notification-preferences")}>
         <Card style={styles.row}>
           <Text style={styles.link}>Notification preferences</Text>

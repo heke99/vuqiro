@@ -4,6 +4,27 @@ Never commit real credentials. This file documents which accounts must exist
 and how to provision them; actual passwords go directly into the App Store
 Connect / Play Console review fields.
 
+## Local development seed accounts (`supabase/seed/seed.sql`)
+
+The dev seed creates these accounts (no passwords in local Supabase Auth —
+set them with `supabase auth` or the Studio when password sign-in is needed):
+
+| Email | Handle | Role |
+|---|---|---|
+| `superadmin@vuqiro.app` | vuqiro_admin | platform_superadmin (console) |
+| `admin@vuqiro.app` | vuqiro_ops | admin (console) |
+| `moderator@vuqiro.app` | vuqiro_mod | moderator (console) |
+| `finance@vuqiro.app` | vuqiro_fin | finance (console) |
+| `support@vuqiro.app` | vuqiro_sup | support (console) |
+| `viewer@example.com` | vuqiro_viewer | consumer (1,250-coin wallet, follows, likes, membership, interests) |
+| `maya@example.com` etc. | maya, riven, noorbuilds, solacooks, kaimoves | creators with videos, ledgers, payout accounts |
+
+Seeded business data: full ads chain (Solstice Coffee / Nimbus Fitness →
+accounts → CPM/CPC/fixed campaigns → groups → creatives → active sponsorship
+deal + platform revenue), moderation case + report + appeal + copyright
+claim, moderation rules, platform settings, support case, integration-health
+snapshots, notifications.
+
 ## Consumer review account
 
 - Email: `review-viewer@vuqiro.app` (create in Supabase Auth before submission)

@@ -1,20 +1,47 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams } from "expo-router";
 import React, { useState } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Pressable, Share, StyleSheet, Text, View } from "react-native";
 import { ModalShell } from "../../src/components/ModalShell";
+import { trackEvent } from "../../src/features/video/videoEvents";
+import { apiFetch, isApiConfigured } from "../../src/services/api/client";
 import { colors, radii, spacing } from "../../src/design/theme";
 
-const shareTargets: { id: string; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
+const shareTargets: { id: "copy" | "system"; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
   { id: "copy", label: "Copy link", icon: "link" },
-  { id: "message", label: "Message", icon: "chatbubble-ellipses" },
-  { id: "more", label: "More apps", icon: "share-social" }
+  { id: "system", label: "Share via…", icon: "share-social" }
 ];
 
 export default function ShareSheet() {
   const { videoId } = useLocalSearchParams<{ videoId?: string }>();
   const [copied, setCopied] = useState(false);
   const shareUrl = `https://vuqiro.app/v/${videoId ?? "video"}`;
+
+  const recordShare = (channel: "copy_link" | "system_sheet") => {
+    trackEvent("video_share", { videoId: videoId ?? "unknown" });
+    if (isApiConfigured() && videoId) {
+      apiFetch(`/videos/${videoId}/share`, {
+        method: "POST",
+        body: JSON.stringify({ channel })
+      }).catch(() => {
+        // share counters are best-effort
+      });
+    }
+  };
+
+  const onTarget = async (target: "copy" | "system") => {
+    if (target === "copy") {
+      setCopied(true);
+      recordShare("copy_link");
+      return;
+    }
+    recordShare("system_sheet");
+    try {
+      await Share.share({ message: `Watch this on Vuqiro: ${shareUrl}`, url: shareUrl });
+    } catch {
+      // user dismissed the sheet
+    }
+  };
 
   return (
     <ModalShell title="Share" subtitle="Share this video outside Vuqiro.">
@@ -25,26 +52,15 @@ export default function ShareSheet() {
       </View>
       <View style={styles.targets}>
         {shareTargets.map((target) => (
-          <Pressable
-            key={target.id}
-            style={styles.target}
-            onPress={() => {
-              if (target.id === "copy") setCopied(true);
-            }}
-          >
+          <Pressable key={target.id} style={styles.target} onPress={() => onTarget(target.id)}>
             <View style={styles.targetIcon}>
               <Ionicons name={target.icon} size={22} color={colors.text} />
             </View>
-            <Text style={styles.targetLabel}>
-              {target.id === "copy" && copied ? "Copied!" : target.label}
-            </Text>
+            <Text style={styles.targetLabel}>{target.id === "copy" && copied ? "Copied!" : target.label}</Text>
           </Pressable>
         ))}
       </View>
-      <Text style={styles.note}>
-        Native share integration is connected when real video URLs exist. Share events count toward
-        video analytics.
-      </Text>
+      <Text style={styles.note}>Share events count toward video analytics and the creator's reach.</Text>
     </ModalShell>
   );
 }

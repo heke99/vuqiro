@@ -9,21 +9,23 @@ design system, monetization model and architecture.
 
 | Path | Description |
 |---|---|
-| `apps/mobile` | Expo React Native app (Expo Router): feed, discover, upload, wallet, creator studio, notifications, settings/legal |
-| `apps/admin` | Next.js superadmin console: dashboard, users, creators, videos, comments, moderation, monetization, payouts, legal, feature flags, audit log, fraud/safety, store readiness |
-| `apps/api` | Hono API service: auth/RBAC, feeds & ranking, social graph, video pipeline, wallet economy, RevenueCat/Stripe/Mux webhooks, moderation enforcement, notifications, audit logging |
-| `packages/types` | Shared domain model (14 domains) |
-| `packages/mock-data` | Deterministic mock data (used whenever credentials are absent) |
+| `apps/mobile` | Expo React Native app (Expo Router): onboarding, vertical feed with sponsored cards, discover, upload, comments, wallet, creator studio, notifications/push, privacy & safety settings, account deletion, legal |
+| `apps/admin` | Next.js admin console on live API data with role-based access: dashboard, users, creators, videos, comments, moderation, reports, appeals, copyright, fraud/safety, full ads suite (advertisers → campaigns → creatives → sponsorships → reporting), monetization + payouts + revenue ledgers, privacy & deletion, legal publishing, feature flags, platform settings, integration health, support cases, admin users, audit log |
+| `apps/api` | Hono API service: auth/RBAC, feeds & ranking with server-side ad insertion, social graph, video pipeline, wallet economy, ads serving + CPM/CPC billing, privacy/GDPR endpoints, RevenueCat/Stripe/Mux webhooks (idempotent), moderation enforcement, push job runner, audit logging |
+| `packages/types` | Shared domain model (17 domains incl. ads, privacy, ops) |
+| `packages/mock-data` | Deterministic mock data (development/test only) |
 | `packages/ui` | Design tokens + admin design-system components |
-| `packages/config` | Typed environment contract |
-| `packages/services` | Provider adapters: Mux/mock video, RevenueCat/mock payments, Stripe/mock payouts |
-| `supabase/` | Migrations (39 tables, RLS everywhere, atomic wallet functions), seed, CLI config |
-| `docs/` | Architecture, implementation reports (23 batches), legal, app-store, testing, launch |
-| `scripts/` | Migration validation, app-asset generation, OSS reference fetching |
+| `packages/config` | Typed env contract + `assertProductionSafety()` production guard |
+| `packages/services` | Provider adapters with health checks: Mux/mock video, RevenueCat/mock payments, Stripe/mock payouts, Expo/mock push |
+| `supabase/` | Migrations (89 tables, RLS everywhere, atomic wallet functions, counter triggers, append-only ledgers, storage buckets), seed, CLI config |
+| `docs/` | Architecture, implementation reports, open-source audit, legal, app-store, testing, launch |
+| `scripts/` | Migration validation (schema + RLS + wallet + ads assertions), app-asset generation, OSS reference fetching |
 
-**Everything runs with zero credentials** — mock providers activate
-automatically. Real providers (Supabase, Mux, RevenueCat, Stripe, Sentry)
-switch on via environment variables. See `.env.example`.
+**Development runs with zero credentials** — mock providers activate
+automatically. Real providers (Supabase, Mux, RevenueCat, Stripe, Expo push,
+Sentry) switch on via environment variables (see `.env.example`).
+**Production never falls back to mocks**: the API refuses to boot and the
+admin console shows a configuration error when providers are missing.
 
 ## Quick start
 
@@ -39,8 +41,9 @@ pnpm dev:api           # http://localhost:3002/health
 ```bash
 pnpm lint
 pnpm typecheck
-pnpm test                              # 136 tests
-bash scripts/validate-migrations.sh    # schema + RLS + wallet integrity (needs local Postgres)
+pnpm test                              # 222 tests (api + mobile + admin + packages)
+pnpm --filter admin build              # Next.js production build
+bash scripts/validate-migrations.sh    # schema + RLS + wallet + ads integrity (needs local Postgres)
 ```
 
 ## Builds & launch
@@ -53,7 +56,8 @@ bash scripts/validate-migrations.sh    # schema + RLS + wallet integrity (needs 
 
 ## Open source usage
 
-Open-source references are documented in `docs/legal/source-usage.md`.
+The full license audit lives in `docs/open-source/oss-intake-report.md`
+(approved / reference-only / rejected classification) with aggregated
+attributions in `docs/open-source/third-party-notices.md` and `NOTICE.md`.
 GPL/AGPL projects are reference-only unless Diversa Solutions LLC makes a
-separate written license decision. MIT dependencies may be used if documented
-and technically appropriate.
+separate written license decision; no copyleft code exists in this repo.

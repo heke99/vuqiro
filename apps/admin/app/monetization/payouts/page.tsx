@@ -1,127 +1,134 @@
 import { AdminMetricCard, AdminPageHeader, AdminStatusBadge, AdminTable } from "@vuqiro/ui/admin";
-import { mockCreators, mockPayoutHolds, mockPayouts } from "@vuqiro/mock-data";
-import type { CreatorPayout, PayoutHold } from "@vuqiro/types";
 import { AdminApiAction } from "../../../components/AdminApiAction";
-import { MockAction } from "../../../components/MockAction";
+import { ErrorBanner, guardPage } from "../../../components/PageGuard";
+import { adminApiFetch } from "../../../lib/adminApi";
+import { fieldDate, fieldNum, fieldStr, type Row } from "../../../lib/rows";
 
-export default function PayoutsPage() {
-  const creatorById = new Map(mockCreators.map((creator) => [creator.id, creator]));
-  const totalPending = mockPayouts
-    .filter((payout) => payout.status === "pending" || payout.status === "payable")
-    .reduce((sum, payout) => sum + payout.amount, 0);
-  const totalHeld = mockPayouts
-    .filter((payout) => payout.status === "held")
-    .reduce((sum, payout) => sum + payout.amount, 0);
+function payoutAmount(payout: Row): number {
+  return fieldNum(payout, "amount_cents", "amountCents") / 100 || fieldNum(payout, "amount");
+}
+
+export default async function PayoutsPage() {
+  const { identity, denied } = await guardPage("/monetization/payouts");
+  if (denied) return denied;
+  const canAct = ["platform_superadmin", "finance"].includes(identity.admin.role);
+  const result = await adminApiFetch<{ payouts: Row[]; holds: Row[] }>("/admin/payouts");
+
+  const payouts = result.ok ? result.data.payouts : [];
+  const holds = result.ok ? result.data.holds : [];
+  const totalPending = payouts
+    .filter((payout) => ["pending", "payable"].includes(fieldStr(payout, "status")))
+    .reduce((sum, payout) => sum + payoutAmount(payout), 0);
+  const totalHeld = payouts
+    .filter((payout) => fieldStr(payout, "status") === "held")
+    .reduce((sum, payout) => sum + payoutAmount(payout), 0);
 
   return (
     <>
       <AdminPageHeader
         kicker="Monetization"
         title="Creator payouts"
-        copy="Stripe Connect payout batches with superadmin hold/release controls. Every hold, release and batch action is audit-logged."
-        actions={<MockAction label="Create payout batch" variant="primary" />}
+        copy="Stripe Connect payout batches with finance/superadmin hold, release and batch controls. Every action is audit-logged."
+        actions={
+          canAct ? (
+            <AdminApiAction label="Create payout batch" variant="primary" path="/admin/payouts/batch" body={{}} />
+          ) : undefined
+        }
       />
+      {!result.ok ? <ErrorBanner message={result.error} /> : null}
       <div className="grid" style={{ marginBottom: 24 }}>
         <AdminMetricCard label="Pending / payable" value={`$${totalPending.toLocaleString(undefined, { maximumFractionDigits: 0 })}`} />
-        <AdminMetricCard label="Held" value={`$${totalHeld.toLocaleString(undefined, { maximumFractionDigits: 0 })}`} hint={`${mockPayoutHolds.length} active holds`} />
-        <AdminMetricCard label="Processing" value={mockPayouts.filter((payout) => payout.status === "processing").length} />
-        <AdminMetricCard label="Failed" value={mockPayouts.filter((payout) => payout.status === "failed").length} />
+        <AdminMetricCard label="Held" value={`$${totalHeld.toLocaleString(undefined, { maximumFractionDigits: 0 })}`} hint={`${holds.length} active holds`} />
+        <AdminMetricCard label="Processing" value={payouts.filter((payout) => fieldStr(payout, "status") === "processing").length} />
+        <AdminMetricCard label="Failed" value={payouts.filter((payout) => fieldStr(payout, "status") === "failed").length} />
       </div>
 
-      <AdminTable<CreatorPayout>
-        columns={[
-          {
-            key: "payout",
-            header: "Payout",
-            render: (payout) => (
-              <>
-                <strong>{payout.id}</strong>
-                <br />
-                {payout.batchId ?? "unbatched"}
-              </>
-            )
-          },
-          {
-            key: "creator",
-            header: "Creator",
-            render: (payout) => (
-              <>
-                {creatorById.get(payout.creatorId)?.displayName ?? payout.creatorId}
-                <br />@{creatorById.get(payout.creatorId)?.handle}
-              </>
-            )
-          },
-          { key: "amount", header: "Amount", render: (payout) => `$${payout.amount.toLocaleString()} ${payout.currency}` },
-          { key: "status", header: "Status", render: (payout) => <AdminStatusBadge status={payout.status} /> },
-          {
-            key: "failure",
-            header: "Failure",
-            render: (payout) => payout.failureReason ?? "—"
-          },
-          {
-            key: "created",
-            header: "Created / paid",
-            render: (payout) => (
-              <>
-                {new Date(payout.createdAt).toLocaleDateString()}
-                <br />
-                {payout.paidAt ? new Date(payout.paidAt).toLocaleDateString() : "—"}
-              </>
-            )
-          },
-          {
-            key: "actions",
-            header: "Actions",
-            render: (payout) => (
-              <div className="actions-cell">
-                {payout.status === "held" ? (
-                  <AdminApiAction label="Release" variant="success" path={`/admin/payouts/${payout.id}/release`} />
-                ) : payout.status === "failed" ? (
-                  <MockAction label="Retry" variant="primary" />
-                ) : payout.status !== "paid" ? (
-                  <AdminApiAction
-                    label="Hold"
-                    variant="danger"
-                    path={`/admin/payouts/${payout.id}/hold`}
-                    body={{ reason: "manual_admin_hold" }}
-                  />
-                ) : null}
-                <MockAction label="View ledger" />
-              </div>
-            )
-          }
-        ]}
-        rows={mockPayouts}
-      />
+      {payouts.length === 0 ? <div className="empty-state">No payouts yet.</div> : null}
+      {payouts.length > 0 ? (
+        <AdminTable<Row>
+          columns={[
+            {
+              key: "payout",
+              header: "Payout",
+              render: (payout) => (
+                <>
+                  <strong>{fieldStr(payout, "id").slice(0, 14)}</strong>
+                  <br />
+                  {fieldStr(payout, "batch_id", "batchId") || "unbatched"}
+                </>
+              )
+            },
+            {
+              key: "creator",
+              header: "Creator",
+              render: (payout) => {
+                const creators = (payout.creators ?? {}) as Row;
+                const profile = (creators.profiles ?? {}) as Row;
+                return `@${fieldStr(profile, "handle") || fieldStr(payout, "creatorId", "creator_id").slice(0, 12)}`;
+              }
+            },
+            {
+              key: "amount",
+              header: "Amount",
+              render: (payout) => `$${payoutAmount(payout).toLocaleString()} ${fieldStr(payout, "currency") || "USD"}`
+            },
+            { key: "status", header: "Status", render: (payout) => <AdminStatusBadge status={fieldStr(payout, "status")} /> },
+            { key: "failure", header: "Failure", render: (payout) => fieldStr(payout, "failure_reason", "failureReason") || "—" },
+            { key: "created", header: "Created", render: (payout) => fieldDate(payout, "created_at", "createdAt") },
+            {
+              key: "actions",
+              header: "Actions",
+              render: (payout) => {
+                if (!canAct) return <span className="metric-hint">Finance/superadmin only</span>;
+                const id = fieldStr(payout, "id");
+                const status = fieldStr(payout, "status");
+                return (
+                  <div className="actions-cell">
+                    {status === "held" ? (
+                      <AdminApiAction label="Release" variant="success" path={`/admin/payouts/${id}/release`} />
+                    ) : status !== "paid" && status !== "failed" ? (
+                      <AdminApiAction
+                        label="Hold"
+                        variant="danger"
+                        path={`/admin/payouts/${id}/hold`}
+                        body={{ reason: "manual_admin_hold" }}
+                      />
+                    ) : null}
+                  </div>
+                );
+              }
+            }
+          ]}
+          rows={payouts}
+        />
+      ) : null}
 
       <div className="section-header">
         <h2>Active holds</h2>
-        <p className="copy">Payout holds and the reason they were placed. Only superadmins can release.</p>
+        <p className="copy">Payout holds and the reason they were placed. Only finance/superadmin can release.</p>
       </div>
-      <AdminTable<PayoutHold>
-        columns={[
-          { key: "id", header: "Hold", render: (hold) => <strong>{hold.id}</strong> },
-          {
-            key: "creator",
-            header: "Creator",
-            render: (hold) => creatorById.get(hold.creatorId)?.displayName ?? hold.creatorId
-          },
-          { key: "reason", header: "Reason", render: (hold) => <AdminStatusBadge status={hold.reason} tone="warning" /> },
-          { key: "note", header: "Note", render: (hold) => hold.note ?? "—" },
-          { key: "placedBy", header: "Placed by", render: (hold) => hold.placedBy },
-          { key: "created", header: "Created", render: (hold) => new Date(hold.createdAt).toLocaleDateString() },
-          {
-            key: "actions",
-            header: "Actions",
-            render: () => (
-              <div className="actions-cell">
-                <MockAction label="Release hold" variant="success" />
-              </div>
-            )
-          }
-        ]}
-        rows={mockPayoutHolds}
-      />
+      {holds.length > 0 ? (
+        <AdminTable<Row>
+          columns={[
+            { key: "id", header: "Hold", render: (hold) => <strong>{fieldStr(hold, "id").slice(0, 14)}</strong> },
+            {
+              key: "creator",
+              header: "Creator",
+              render: (hold) => {
+                const creators = (hold.creators ?? {}) as Row;
+                const profile = (creators.profiles ?? {}) as Row;
+                return `@${fieldStr(profile, "handle") || fieldStr(hold, "creatorId", "creator_id").slice(0, 12)}`;
+              }
+            },
+            { key: "reason", header: "Reason", render: (hold) => <AdminStatusBadge status={fieldStr(hold, "reason")} /> },
+            { key: "note", header: "Note", render: (hold) => fieldStr(hold, "note") || "—" },
+            { key: "created", header: "Created", render: (hold) => fieldDate(hold, "created_at", "createdAt") }
+          ]}
+          rows={holds}
+        />
+      ) : (
+        <div className="empty-state">No active holds.</div>
+      )}
     </>
   );
 }

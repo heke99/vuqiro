@@ -6,7 +6,8 @@ import {
   mockPackages,
   mockPackageVersions,
   mockPayouts,
-  mockReports
+  mockReports,
+  mockStoreProducts
 } from "@vuqiro/mock-data";
 import { writeAuditLog } from "../lib/audit";
 import { badRequest, notFound } from "../lib/errors";
@@ -76,6 +77,16 @@ adminRoutes.get("/monetization/packages", async (c) => {
   ]);
   if (error) throw badRequest(error.message);
   return c.json({ packages: packages ?? [], versions: versions ?? [], source: "db" });
+});
+
+adminRoutes.get("/monetization/store-products", async (c) => {
+  if (!isBackendConfigured()) {
+    return c.json({ products: mockStoreProducts, source: "mock" });
+  }
+  const db = getServiceDb()!;
+  const { data, error } = await db.from("store_products").select("*").order("created_at");
+  if (error) throw badRequest(error.message);
+  return c.json({ products: data ?? [], source: "db" });
 });
 
 const packageVersionBody = z.object({

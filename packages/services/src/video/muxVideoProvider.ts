@@ -1,4 +1,5 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
+import type { ProviderHealth } from "../health/providerHealth";
 import type {
   CreateDirectUploadParams,
   DirectUpload,
@@ -155,5 +156,18 @@ export class MuxVideoProvider implements VideoProvider {
       return { valid: false, reason: "Signature mismatch" };
     }
     return { valid: true };
+  }
+
+  async healthCheck(): Promise<ProviderHealth> {
+    try {
+      await this.request("/video/v1/assets?limit=1");
+      return { provider: "video", status: "ok", message: "Mux API reachable" };
+    } catch (error) {
+      return {
+        provider: "video",
+        status: "down",
+        message: error instanceof Error ? error.message.slice(0, 200) : "Mux API unreachable"
+      };
+    }
   }
 }

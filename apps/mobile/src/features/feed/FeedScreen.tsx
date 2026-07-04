@@ -1,14 +1,20 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { FlatList, Pressable, StyleSheet, Text, View, useWindowDimensions } from "react-native";
+import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View, useWindowDimensions } from "react-native";
 import type { ViewToken } from "react-native";
 import { mockCreators } from "@vuqiro/mock-data";
 import { colors, spacing } from "../../design/theme";
 import { mockFeedEntries, useFeed, type FeedEntry } from "../../services/data/feedData";
+import { endFeedSession, startFeedSession, trackFeedImpression } from "../../services/data/feedTracking";
 import { useSocial } from "../social/SocialContext";
 import { trackEvent } from "../video/videoEvents";
 import { FeedItem } from "./FeedItem";
+import { SponsoredAdCard } from "./SponsoredAdCard";
 
 type FeedTab = "for_you" | "following";
+
+function entryKey(entry: FeedEntry, index: number): string {
+  return entry.kind === "ad" ? `ad_${entry.ad.creativeId}_${index}` : entry.video.id;
+}
 
 export function FeedScreen() {
   const { height } = useWindowDimensions();
@@ -19,18 +25,25 @@ export function FeedScreen() {
 
   useEffect(() => {
     trackEvent("feed_view");
+    void startFeedSession(feedTab);
+    return () => {
+      void endFeedSession(0);
+    };
   }, [feedTab]);
 
   const data: FeedEntry[] = useMemo(() => {
     // Live entries when the API is reachable, mock entries otherwise.
-    const source = liveFeed.isLive ? liveFeed.entries : mockFeedEntries();
-    // Blocked creators are always hidden, in every feed.
-    const visible = source.filter((entry) => !social.isBlocked(entry.video.creatorId));
+    const source = liveFeed.isLive || liveFeed.entries.length > 0 ? liveFeed.entries : mockFeedEntries();
+    // Blocked creators are always hidden, in every feed. Ads pass through.
+    const visible = source.filter((entry) => entry.kind === "ad" || !social.isBlocked(entry.video.creatorId));
     if (feedTab === "following" && !liveFeed.isLive) {
-      const followed = visible.filter((entry) => social.isFollowing(entry.video.creatorId));
+      const followed = visible.filter(
+        (entry) => entry.kind === "video" && social.isFollowing(entry.video.creatorId)
+      );
       if (followed.length > 0) return followed;
       // Cold-start fallback until the user follows someone: verified creators.
       return visible.filter((entry) => {
+        if (entry.kind === "ad") return false;
         const creator = mockCreators.find((candidate) => candidate.id === entry.video.creatorId);
         return creator?.isVerified;
       });
@@ -43,32 +56,64 @@ export function FeedScreen() {
     if (visible && typeof visible.index === "number") {
       setActiveIndex(visible.index);
       const item = visible.item as FeedEntry;
-      trackEvent("video_impression", { videoId: item.video.id, creatorId: item.video.creatorId });
+      if (item.kind === "video") {
+        trackEvent("video_impression", { videoId: item.video.id, creatorId: item.video.creatorId });
+        trackFeedImpression({ videoId: item.video.id, position: visible.index, source: "feed" });
+      }
+      // Ad impressions are billed server-side and sent by SponsoredAdCard.
     }
   });
 
   const renderItem = useCallback(
-    ({ item, index }: { item: FeedEntry; index: number }) => (
-      <FeedItem video={item.video} creator={item.creator} height={height} isActive={index === activeIndex} />
-    ),
+    ({ item, index }: { item: FeedEntry; index: number }) => {
+      if (item.kind === "ad") {
+        return <SponsoredAdCard ad={item.ad} height={height} isActive={index === activeIndex} />;
+      }
+      return <FeedItem video={item.video} creator={item.creator} height={height} isActive={index === activeIndex} />;
+    },
     [height, activeIndex]
   );
 
+  const isEmpty = data.length === 0 && !liveFeed.loading;
+
   return (
     <View style={{ flex: 1 }}>
-      <FlatList
-        data={data}
-        keyExtractor={(item) => item.video.id}
-        pagingEnabled
-        showsVerticalScrollIndicator={false}
-        renderItem={renderItem}
-        onViewableItemsChanged={onViewableItemsChanged.current}
-        viewabilityConfig={{ itemVisiblePercentThreshold: 60 }}
-        windowSize={5}
-        maxToRenderPerBatch={3}
-        initialNumToRender={2}
-        getItemLayout={(_, index) => ({ length: height, offset: height * index, index })}
-      />
+      {isEmpty ? (
+        <View style={styles.emptyState}>
+          <Text style={styles.emptyTitle}>{feedTab === "following" ? "Nothing here yet" : "The feed is empty"}</Text>
+          <Text style={styles.emptyCopy}>
+            {feedTab === "following"
+              ? "Follow creators to fill your Following feed."
+              : "Pull to refresh or check back soon."}
+          </Text>
+          <Pressable style={styles.retryButton} onPress={liveFeed.reload}>
+            <Text style={styles.retryText}>Retry</Text>
+          </Pressable>
+        </View>
+      ) : (
+        <FlatList
+          data={data}
+          keyExtractor={entryKey}
+          pagingEnabled
+          showsVerticalScrollIndicator={false}
+          renderItem={renderItem}
+          onViewableItemsChanged={onViewableItemsChanged.current}
+          viewabilityConfig={{ itemVisiblePercentThreshold: 60 }}
+          windowSize={5}
+          maxToRenderPerBatch={3}
+          initialNumToRender={2}
+          getItemLayout={(_, index) => ({ length: height, offset: height * index, index })}
+          onEndReached={liveFeed.hasMore ? liveFeed.loadMore : undefined}
+          onEndReachedThreshold={2}
+          ListFooterComponent={
+            liveFeed.loading ? (
+              <View style={[styles.loadingFooter, { height: 80 }]}>
+                <ActivityIndicator color={colors.primary} />
+              </View>
+            ) : null
+          }
+        />
+      )}
       <View style={styles.feedHeader}>
         <View style={styles.feedTabs}>
           <Pressable onPress={() => setFeedTab("following")}>
@@ -91,5 +136,17 @@ const styles = StyleSheet.create({
   feedTabs: { flexDirection: "row", gap: spacing.lg },
   feedTabText: { color: colors.textMuted, fontSize: 16, fontWeight: "800" },
   feedTabActive: { color: colors.text },
-  feedHeaderSub: { color: colors.textMuted, fontSize: 11 }
+  feedHeaderSub: { color: colors.textMuted, fontSize: 11 },
+  loadingFooter: { alignItems: "center", justifyContent: "center" },
+  emptyState: { flex: 1, alignItems: "center", justifyContent: "center", gap: spacing.sm, padding: spacing.xl },
+  emptyTitle: { color: colors.text, fontSize: 20, fontWeight: "900" },
+  emptyCopy: { color: colors.textMuted, textAlign: "center" },
+  retryButton: {
+    marginTop: spacing.md,
+    backgroundColor: colors.surfaceElevated,
+    borderRadius: 999,
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.md
+  },
+  retryText: { color: colors.text, fontWeight: "900" }
 });

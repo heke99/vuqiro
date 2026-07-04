@@ -1,101 +1,86 @@
 import { AdminPageHeader, AdminStatusBadge, AdminTable } from "@vuqiro/ui/admin";
-import { mockCreators, mockPayoutAccounts, mockPayoutHolds } from "@vuqiro/mock-data";
-import type { Creator } from "@vuqiro/types";
-import { MockAction } from "../../components/MockAction";
+import { AdminApiAction } from "../../components/AdminApiAction";
+import { ErrorBanner, guardPage } from "../../components/PageGuard";
+import { adminApiFetch } from "../../lib/adminApi";
+import { field, fieldDate, fieldStr, type Row } from "../../lib/rows";
 
-export default function CreatorsPage() {
-  const accountByCreator = new Map(mockPayoutAccounts.map((account) => [account.creatorId, account]));
-  const heldCreators = new Set(mockPayoutHolds.filter((hold) => !hold.releasedAt).map((hold) => hold.creatorId));
+export default async function CreatorsPage() {
+  const { identity, denied } = await guardPage("/creators");
+  if (denied) return denied;
+  const canEnforce = ["platform_superadmin", "admin", "moderator"].includes(identity.admin.role);
+  const result = await adminApiFetch<{ creators: Row[] }>("/admin/creators");
 
   return (
     <>
       <AdminPageHeader
         kicker="Community"
         title="Creators"
-        copy="Creator accounts with verification, revenue and payout state. Verification and payout actions are audit-logged."
+        copy="Creator accounts with verification, monetization and payout context."
       />
-      <AdminTable<Creator>
-        columns={[
-          {
-            key: "creator",
-            header: "Creator",
-            render: (creator) => (
-              <>
-                <strong>{creator.displayName}</strong>
-                <br />@{creator.handle} · {creator.id}
-              </>
-            )
-          },
-          {
-            key: "verification",
-            header: "Verification",
-            render: (creator) => <AdminStatusBadge status={creator.verificationStatus ?? "unverified"} />
-          },
-          {
-            key: "audience",
-            header: "Audience",
-            render: (creator) => (
-              <>
-                {creator.subscriberCount.toLocaleString()} subs
-                <br />
-                {creator.followerCount.toLocaleString()} followers
-              </>
-            )
-          },
-          { key: "videos", header: "Videos", render: (creator) => creator.totalVideos ?? 0 },
-          {
-            key: "revenue",
-            header: "Revenue (coins / subs)",
-            render: (creator) =>
-              `$${(creator.coinRevenue ?? 0).toLocaleString()} / $${(creator.subscriptionRevenue ?? 0).toLocaleString()}`
-          },
-          {
-            key: "payout",
-            header: "Payout / Stripe",
-            render: (creator) => {
-              const account = accountByCreator.get(creator.id);
-              return (
-                <>
-                  <AdminStatusBadge status={heldCreators.has(creator.id) ? "held" : account?.payoutsEnabled ? "payable" : "pending"} />
-                  <br />
-                  <AdminStatusBadge status={account?.status ?? "not_onboarded"} />
-                </>
-              );
+      {!result.ok ? <ErrorBanner message={result.error} /> : null}
+      {result.ok && result.data.creators.length === 0 ? <div className="empty-state">No creators yet.</div> : null}
+      {result.ok && result.data.creators.length > 0 ? (
+        <AdminTable<Row>
+          columns={[
+            {
+              key: "creator",
+              header: "Creator",
+              render: (creator) => {
+                const profile = (creator.profiles ?? {}) as Row;
+                return (
+                  <>
+                    <strong>{fieldStr(profile, "display_name") || fieldStr(creator, "displayName")}</strong>
+                    <br />@{fieldStr(profile, "handle") || fieldStr(creator, "handle")}
+                  </>
+                );
+              }
+            },
+            {
+              key: "verification",
+              header: "Verification",
+              render: (creator) => <AdminStatusBadge status={fieldStr(creator, "verification_status", "verificationStatus") || "unverified"} />
+            },
+            {
+              key: "monetization",
+              header: "Monetization",
+              render: (creator) =>
+                field<boolean>(creator, "monetization_enabled", "monetizationEnabled") ? (
+                  <AdminStatusBadge status="active" />
+                ) : (
+                  <AdminStatusBadge status="disabled" />
+                )
+            },
+            { key: "category", header: "Category", render: (creator) => fieldStr(creator, "category") || "—" },
+            { key: "created", header: "Created", render: (creator) => fieldDate(creator, "created_at", "createdAt") },
+            {
+              key: "actions",
+              header: "Actions",
+              render: (creator) => {
+                if (!canEnforce) return <span className="metric-hint">Read-only</span>;
+                const id = fieldStr(creator, "id");
+                const verification = fieldStr(creator, "verification_status", "verificationStatus");
+                const monetized = field<boolean>(creator, "monetization_enabled", "monetizationEnabled");
+                return (
+                  <div className="actions-cell">
+                    {verification !== "verified" ? (
+                      <AdminApiAction label="Verify" path={`/admin/creators/${id}/verify`} variant="success" />
+                    ) : null}
+                    {verification === "pending" ? (
+                      <AdminApiAction label="Reject" path={`/admin/creators/${id}/reject`} variant="danger" />
+                    ) : null}
+                    {monetized ? (
+                      <AdminApiAction label="Disable monetization" path={`/admin/creators/${id}/disable-monetization`} variant="danger" />
+                    ) : (
+                      <AdminApiAction label="Enable monetization" path={`/admin/creators/${id}/enable-monetization`} variant="success" />
+                    )}
+                  </div>
+                );
+              }
             }
-          },
-          {
-            key: "warnings",
-            header: "Warnings",
-            render: (creator) =>
-              creator.moderationWarnings ? <AdminStatusBadge status={`${creator.moderationWarnings} warnings`} tone="warning" /> : "—"
-          },
-          {
-            key: "actions",
-            header: "Actions",
-            render: (creator) => (
-              <div className="actions-cell">
-                {creator.isVerified ? (
-                  <MockAction label="Unverify" variant="danger" />
-                ) : (
-                  <MockAction label="Verify" variant="success" />
-                )}
-                {heldCreators.has(creator.id) ? (
-                  <MockAction label="Release payouts" variant="success" />
-                ) : (
-                  <MockAction label="Hold payouts" variant="danger" />
-                )}
-                <MockAction
-                  label={creator.monetizationEnabled ? "Disable monetization" : "Enable monetization"}
-                  variant={creator.monetizationEnabled ? "danger" : "success"}
-                />
-                <MockAction label="View content" />
-                <MockAction label="View ledger" />
-              </div>
-            )
-          }
-        ]}
-        rows={mockCreators}
-      />
+          ]}
+          rows={result.data.creators}
+        />
+      ) : null}
     </>
   );
 }

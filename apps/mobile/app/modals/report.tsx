@@ -4,6 +4,7 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 import type { ReportReason } from "@vuqiro/types";
 import { Button } from "../../src/components/Button";
 import { ModalShell } from "../../src/components/ModalShell";
+import { apiFetch, isApiConfigured } from "../../src/services/api/client";
 import { colors, radii, spacing } from "../../src/design/theme";
 
 const reasons: { code: ReportReason; label: string }[] = [
@@ -23,6 +24,31 @@ export default function ReportModal() {
   const { targetType, targetId } = useLocalSearchParams<{ targetType?: string; targetId?: string }>();
   const [selected, setSelected] = useState<ReportReason | null>(null);
   const [submitted, setSubmitted] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const submit = async () => {
+    if (!selected) return;
+    setBusy(true);
+    setError(null);
+    try {
+      if (isApiConfigured() && targetId) {
+        await apiFetch("/reports", {
+          method: "POST",
+          body: JSON.stringify({
+            targetType: targetType ?? "video",
+            targetId,
+            reason: selected
+          })
+        });
+      }
+      setSubmitted(true);
+    } catch (submitError) {
+      setError(submitError instanceof Error ? submitError.message : "Could not submit the report.");
+    } finally {
+      setBusy(false);
+    }
+  };
 
   if (submitted) {
     return (
@@ -53,12 +79,11 @@ export default function ReportModal() {
           </Pressable>
         ))}
       </View>
+      {error ? <Text style={styles.errorText}>{error}</Text> : null}
       <Button
-        label={selected ? "Submit report" : "Select a reason"}
+        label={busy ? "Submitting…" : selected ? "Submit report" : "Select a reason"}
         variant={selected ? "danger" : "ghost"}
-        onPress={() => {
-          if (selected) setSubmitted(true);
-        }}
+        onPress={submit}
         style={{ marginTop: spacing.lg }}
       />
       {targetId ? <Text style={styles.meta}>Reference: {targetType} · {targetId}</Text> : null}
@@ -80,5 +105,6 @@ const styles = StyleSheet.create({
   reasonText: { color: colors.textSoft, fontWeight: "800", fontSize: 13 },
   reasonTextSelected: { color: colors.white },
   meta: { color: colors.textMuted, fontSize: 11, marginTop: spacing.md, textAlign: "center" },
+  errorText: { color: colors.danger, marginTop: spacing.md, fontSize: 13 },
   confirmation: { color: colors.textSoft, lineHeight: 22 }
 });

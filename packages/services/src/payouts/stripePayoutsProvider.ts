@@ -1,4 +1,5 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
+import type { ProviderHealth } from "../health/providerHealth";
 import type {
   ConnectAccountStatus,
   ConnectAccountSummary,
@@ -154,5 +155,18 @@ export class StripePayoutsProvider implements PayoutsProvider {
       return { valid: false, reason: "Signature mismatch" };
     }
     return { valid: true };
+  }
+
+  async healthCheck(): Promise<ProviderHealth> {
+    try {
+      await this.request("/balance");
+      return { provider: "payouts", status: "ok", message: "Stripe API reachable" };
+    } catch (error) {
+      return {
+        provider: "payouts",
+        status: "down",
+        message: error instanceof Error ? error.message.slice(0, 200) : "Stripe API unreachable"
+      };
+    }
   }
 }

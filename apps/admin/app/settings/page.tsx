@@ -1,80 +1,36 @@
-import { AdminCard, AdminPageHeader, AdminStatusBadge } from "@vuqiro/ui/admin";
-import { MockAction } from "../../components/MockAction";
+import { AdminPageHeader } from "@vuqiro/ui/admin";
+import { PlatformSettingEditor } from "../../components/PlatformSettingEditor";
+import { ErrorBanner, guardPage } from "../../components/PageGuard";
+import { adminApiFetch } from "../../lib/adminApi";
+import type { Row } from "../../lib/rows";
 
-export default function SettingsPage() {
+export default async function SettingsPage() {
+  const { identity, denied } = await guardPage("/settings");
+  if (denied) return denied;
+  const canEdit = ["platform_superadmin", "admin"].includes(identity.admin.role);
+  const result = await adminApiFetch<{ settings: Row[] }>("/admin/platform-settings");
+
   return (
     <>
       <AdminPageHeader
         kicker="Platform"
-        title="App settings"
-        copy="Global platform configuration. Changes are audit-logged and take effect via feature flags and API config."
+        title="Platform settings"
+        copy="Feed weights, ad frequency, upload limits and moderation thresholds. Values are JSON documents; changes take effect within 30 seconds (settings cache) and are audit-logged."
       />
-      <div className="grid-3">
-        <AdminCard title="Identity">
-          <p className="copy">
-            App: Vuqiro
-            <br />
-            Company: Diversa Solutions LLC
-            <br />
-            iOS bundle: com.diversasolutions.vuqiro
-            <br />
-            Android package: com.diversasolutions.vuqiro
-            <br />
-            Support: support@vuqiro.app
-          </p>
-        </AdminCard>
-        <AdminCard title="Upload limits">
-          <p className="copy">
-            Max duration: 180 seconds
-            <br />
-            Max file size: 500 MB
-            <br />
-            Formats: mp4, mov, webm
-            <br />
-            Rate limit: 10 uploads / hour / creator
-          </p>
-          <MockAction label="Edit limits" />
-        </AdminCard>
-        <AdminCard title="Safety defaults">
-          <p className="copy">
-            New-creator cold start: controlled exposure
-            <br />
-            Report threshold for auto-limit: 5 distinct reports
-            <br />
-            Minor-safety reports: always escalate
-          </p>
-          <MockAction label="Edit safety rules" />
-        </AdminCard>
-        <AdminCard title="Providers">
-          <p className="copy">
-            Video: <AdminStatusBadge status="mock" tone="primary" /> (Mux when credentials exist)
-            <br />
-            Payments: <AdminStatusBadge status="mock" tone="primary" /> (RevenueCat)
-            <br />
-            Payouts: <AdminStatusBadge status="mock" tone="primary" /> (Stripe Connect)
-            <br />
-            All providers activate via environment variables. See .env.example.
-          </p>
-        </AdminCard>
-        <AdminCard title="Fees">
-          <p className="copy">
-            Platform fee: 20%
-            <br />
-            Store fee estimate: 15–30% (charged by Apple/Google)
-            <br />
-            Minimum payout: $25.00
-          </p>
-          <MockAction label="Edit fees" />
-        </AdminCard>
-        <AdminCard title="Danger zone">
-          <p className="copy">Emergency switches. Every use is audit-logged and requires superadmin role.</p>
-          <div className="actions-cell">
-            <MockAction label="Pause uploads" variant="danger" />
-            <MockAction label="Pause purchases" variant="danger" />
-            <MockAction label="Pause payouts" variant="danger" />
-          </div>
-        </AdminCard>
-      </div>
+      {!result.ok ? <ErrorBanner message={result.error} /> : null}
+      {result.ok ? (
+        <div className="stack">
+          {result.data.settings.map((setting) => (
+            <PlatformSettingEditor
+              key={String(setting.key)}
+              settingKey={String(setting.key)}
+              value={(setting.value ?? {}) as Record<string, unknown>}
+              description={String(setting.description ?? "")}
+              readOnly={!canEdit}
+            />
+          ))}
+        </div>
+      ) : null}
     </>
   );
 }

@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import React from "react";
+import type { AdminRole } from "@vuqiro/types";
+import { canAccessPath } from "../lib/rbac";
 
 const groups: { label: string; items: [string, string][] }[] = [
   {
@@ -22,6 +24,9 @@ const groups: { label: string; items: [string, string][] }[] = [
     label: "Safety",
     items: [
       ["/moderation", "Moderation"],
+      ["/reports", "Reports"],
+      ["/appeals", "Appeals"],
+      ["/copyright-claims", "Copyright claims"],
       ["/fraud-safety", "Fraud & safety"]
     ]
   },
@@ -33,36 +38,63 @@ const groups: { label: string; items: [string, string][] }[] = [
       ["/monetization/price-versions", "Price versions"],
       ["/monetization/store-products", "Store products"],
       ["/monetization/revenuecat", "RevenueCat"],
-      ["/monetization/payouts", "Payouts"]
+      ["/monetization/payouts", "Payouts"],
+      ["/monetization/wallet-transactions", "Wallet transactions"],
+      ["/monetization/purchases", "Purchases"],
+      ["/monetization/revenue", "Revenue ledger"]
+    ]
+  },
+  {
+    label: "Ads",
+    items: [
+      ["/ads", "Overview"],
+      ["/ads/advertisers", "Advertisers"],
+      ["/ads/campaigns", "Campaigns"],
+      ["/ads/creatives", "Creatives"],
+      ["/ads/sponsorships", "Sponsorships"],
+      ["/ads/reporting", "Reporting"]
+    ]
+  },
+  {
+    label: "Compliance",
+    items: [
+      ["/legal", "Legal documents"],
+      ["/privacy", "Privacy & deletion"]
     ]
   },
   {
     label: "Platform",
     items: [
       ["/notifications", "Notifications"],
-      ["/legal", "Legal"],
       ["/feature-flags", "Feature flags"],
       ["/settings", "Settings"],
+      ["/integration-health", "Integration health"],
+      ["/support-cases", "Support cases"],
+      ["/admin-users", "Admin users"],
       ["/audit-log", "Audit log"],
       ["/app-store-readiness", "Store readiness"]
     ]
   }
 ];
 
-export function AdminNav() {
+export function AdminNav({ role }: { role: AdminRole }) {
   const pathname = usePathname();
   return (
     <nav className="nav">
-      {groups.map((group) => (
-        <React.Fragment key={group.label}>
-          <div className="nav-group">{group.label}</div>
-          {group.items.map(([href, label]) => (
-            <Link href={href} key={href} className={pathname === href ? "active" : ""}>
-              {label}
-            </Link>
-          ))}
-        </React.Fragment>
-      ))}
+      {groups.map((group) => {
+        const visible = group.items.filter(([href]) => canAccessPath(role, href));
+        if (visible.length === 0) return null;
+        return (
+          <React.Fragment key={group.label}>
+            <div className="nav-group">{group.label}</div>
+            {visible.map(([href, label]) => (
+              <Link href={href} key={href} className={pathname === href ? "active" : ""}>
+                {label}
+              </Link>
+            ))}
+          </React.Fragment>
+        );
+      })}
     </nav>
   );
 }
