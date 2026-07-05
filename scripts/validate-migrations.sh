@@ -242,6 +242,15 @@ begin
     raise exception 'trigram search indexes are missing';
   end if;
 
+  -- Reserved handles are blocked on update.
+  begin
+    update public.profiles set handle = 'admin' where handle = 'vuqiro_viewer';
+    raise exception 'reserved handle update was not blocked';
+  exception
+    when others then
+      if sqlerrm like '%reserved%' then null; else raise; end if;
+  end;
+
   raise notice 'launch gap closure schema assertions passed';
 end
 \$\$;

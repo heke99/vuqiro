@@ -124,9 +124,11 @@ on conflict (platform, store_product_id) do nothing;
 -- Wallet for the viewer test account
 -- ---------------------------------------------------------------------------
 
+-- Wallets are auto-provisioned at signup (balance 0); the seed tops up the
+-- viewer so wallet flows are exercisable immediately.
 insert into public.wallets (profile_id, coin_balance)
 select id, 1250 from public.profiles where handle = 'vuqiro_viewer'
-on conflict (profile_id) do nothing;
+on conflict (profile_id) do update set coin_balance = excluded.coin_balance;
 
 -- ---------------------------------------------------------------------------
 -- Feature flags

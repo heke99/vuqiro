@@ -1,3 +1,4 @@
+import { preparePlaybackUrl } from "./playback";
 import { getServiceDb } from "./supabase";
 
 export type FeedItemDto = {
@@ -75,7 +76,7 @@ export function toFeedDto(row: VideoRow): FeedItemDto {
     coinUnlockPrice: row.coin_unlock_price ?? undefined,
     requiredTier: row.required_tier ?? undefined,
     // Server-side entitlement rule: locked content never exposes playback.
-    playbackUrl: locked ? undefined : (row.playback_url ?? undefined),
+    playbackUrl: locked ? undefined : preparePlaybackUrl(row.playback_url),
     thumbnailUrl: row.thumbnail_url ?? undefined,
     likeCount: row.like_count,
     commentCount: row.comment_count,

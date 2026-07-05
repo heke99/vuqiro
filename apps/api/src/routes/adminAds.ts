@@ -13,6 +13,7 @@ import { writeAuditLog } from "../lib/audit";
 import { csvResponseHeaders, toCsv } from "../lib/csv";
 import { badRequest, notFound } from "../lib/errors";
 import { getServiceDb, isBackendConfigured } from "../lib/supabase";
+import { safeHttpUrl } from "../lib/validation";
 import type { AppEnv } from "../middleware/auth";
 import { requireAdmin } from "../middleware/auth";
 
@@ -46,7 +47,7 @@ const advertiserBody = z.object({
   legalName: z.string().trim().max(200).default(""),
   contactEmail: z.string().email().or(z.literal("")).default(""),
   contactName: z.string().trim().max(120).default(""),
-  websiteUrl: z.string().url().optional(),
+  websiteUrl: safeHttpUrl.optional(),
   country: z.string().length(2).optional(),
   notes: z.string().trim().max(2000).default(""),
   /** Platform user who self-manages this advertiser (advertiser portal). */
@@ -414,9 +415,9 @@ const creativeBody = z.object({
   title: z.string().trim().min(1).max(120),
   body: z.string().trim().max(500).default(""),
   ctaLabel: z.string().trim().min(1).max(40).default("Learn more"),
-  ctaUrl: z.string().url(),
-  mediaUrl: z.string().url().optional(),
-  thumbnailUrl: z.string().url().optional(),
+  ctaUrl: safeHttpUrl,
+  mediaUrl: safeHttpUrl.optional(),
+  thumbnailUrl: safeHttpUrl.optional(),
   videoId: z.string().optional()
 });
 

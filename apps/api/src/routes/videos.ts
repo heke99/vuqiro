@@ -4,6 +4,7 @@ import { mockComments, mockVideos } from "@vuqiro/mock-data";
 import { badRequest, notFound } from "../lib/errors";
 import { blockedCreatorIds, toFeedDto, visibleVideosQuery, type VideoRow } from "../lib/feedQuery";
 import { notifyProfile } from "../lib/notify";
+import { preparePlaybackUrl } from "../lib/playback";
 import { enforceRateLimit } from "../lib/rateLimit";
 import { getServiceDb, isBackendConfigured } from "../lib/supabase";
 import type { AppEnv } from "../middleware/auth";
@@ -47,7 +48,7 @@ videoRoutes.get("/:id/access", requireUser, async (c) => {
   }
 
   if (video.visibility === "public") {
-    return c.json({ access: true, reason: "public", playbackUrl: video.playback_url, source: "db" });
+    return c.json({ access: true, reason: "public", playbackUrl: preparePlaybackUrl(video.playback_url), source: "db" });
   }
 
   // Owner always has access.
@@ -58,7 +59,7 @@ videoRoutes.get("/:id/access", requireUser, async (c) => {
     .eq("id", video.creator_id)
     .maybeSingle();
   if (ownCreator) {
-    return c.json({ access: true, reason: "owner", playbackUrl: video.playback_url, source: "db" });
+    return c.json({ access: true, reason: "owner", playbackUrl: preparePlaybackUrl(video.playback_url), source: "db" });
   }
 
   if (video.visibility === "followers_only") {
@@ -69,7 +70,7 @@ videoRoutes.get("/:id/access", requireUser, async (c) => {
       .eq("creator_id", video.creator_id)
       .maybeSingle();
     if (follow) {
-      return c.json({ access: true, reason: "follower", playbackUrl: video.playback_url, source: "db" });
+      return c.json({ access: true, reason: "follower", playbackUrl: preparePlaybackUrl(video.playback_url), source: "db" });
     }
     return c.json({ access: false, reason: "follow_required", source: "db" }, 403);
   }
@@ -83,7 +84,7 @@ videoRoutes.get("/:id/access", requireUser, async (c) => {
       .is("revoked_at", null)
       .maybeSingle();
     if (entitlement) {
-      return c.json({ access: true, reason: "coin_unlock", playbackUrl: video.playback_url, source: "db" });
+      return c.json({ access: true, reason: "coin_unlock", playbackUrl: preparePlaybackUrl(video.playback_url), source: "db" });
     }
     return c.json({ access: false, reason: "unlock_required", source: "db" }, 403);
   }
@@ -100,7 +101,7 @@ videoRoutes.get("/:id/access", requireUser, async (c) => {
     .in("status", ["active", "grace_period"])
     .maybeSingle();
   if (membership && tierRank[membership.tier as keyof typeof tierRank] >= requiredRank) {
-    return c.json({ access: true, reason: "membership", playbackUrl: video.playback_url, source: "db" });
+    return c.json({ access: true, reason: "membership", playbackUrl: preparePlaybackUrl(video.playback_url), source: "db" });
   }
   return c.json({ access: false, reason: "subscription_required", source: "db" }, 403);
 });

@@ -17,7 +17,7 @@ underlying audit) and the external dependencies that remain after the code is do
 | B7 | Ads: advertiser self-serve, CSV exports, daily pacing, promoted labels | Done |
 | B8 | Notifications: email adapter, deep links, dedupe; data-export/deletion workers; rate-limit logging | Done |
 | B9 | Analytics: rollup job, admin analytics page, CSV export | Done |
-| B10 | Security hardening + docs/security.md + permission tests | Pending |
+| B10 | Security hardening + docs/security.md + permission tests | Done |
 | B11 | API/env/deployment/launch docs, CI migration validation, final gate | Pending |
 
 ## B0 changes
@@ -220,6 +220,31 @@ underlying audit) and the external dependencies that remain after the code is do
   `platform-analytics` entry in the export proxy allowlist).
 - Tests: rollup RBAC + date validation, analytics totals/series, CSV export
   (6 new tests). Admin production build verified.
+
+## B10 changes
+
+- Migration `20260705160000_security_hardening.sql`: reserved-handle list
+  (`is_reserved_handle`) enforced at signup (suffix instead) and on handle
+  updates (trigger raises); wallets auto-provision at signup (seed updated to
+  top-up instead of insert-or-skip); migration validation asserts the guard.
+- Signed Mux playback (env-gated): `MUX_SIGNING_KEY_ID` +
+  `MUX_SIGNING_PRIVATE_KEY` enable short-lived RS256 tokens on every Mux
+  stream URL leaving the API (`packages/services/src/video/playbackSigning.ts`
+  + response-time signing in feed DTOs and the access endpoint). Without keys
+  the behavior is unchanged (public playback policy).
+- URL scheme hardening: new `safeHttpUrl` validator (https-only; http only for
+  localhost) applied to profile website/avatar URLs, advertiser websites and
+  ad creative CTA/media/thumbnail URLs — blocks `javascript:`/`data:` scheme
+  abuse that `z.string().url()` allowed.
+- Headers: API adds `cross-origin-opener-policy`, `permissions-policy`,
+  `cross-origin-resource-policy` and HSTS (staging/production); the admin
+  console gets an equivalent header set via `next.config.js`. (Admin session
+  refresh middleware landed in B7.)
+- Console-log sweep: verified no PII/token logging in API or mobile.
+- `docs/security.md` written (auth/RBAC, RLS, validation, rate limiting,
+  content access, webhooks, headers, auditing, privacy, error handling).
+- Tests: `safeHttpUrl` unit + boundary tests (creative/profile URL rejection),
+  playback token signing verification (RS256 round-trip) — 8 new tests.
 
 ## Open external dependencies
 

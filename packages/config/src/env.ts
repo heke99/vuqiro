@@ -27,6 +27,9 @@ export interface VuqiroEnv {
   videoProviderApiKey?: string;
   videoProviderApiSecret?: string;
   videoWebhookSecret?: string;
+  /** Mux signed-playback key pair (optional; enables expiring stream URLs). */
+  muxSigningKeyId?: string;
+  muxSigningPrivateKey?: string;
   pushProvider: "expo" | "mock";
   expoAccessToken?: string;
   emailProvider: "resend" | "mock";
@@ -98,6 +101,8 @@ export function loadEnv(source: EnvSource = typeof process !== "undefined" ? pro
     videoProviderApiKey: str(source, "VIDEO_PROVIDER_API_KEY"),
     videoProviderApiSecret: str(source, "VIDEO_PROVIDER_API_SECRET"),
     videoWebhookSecret: str(source, "VIDEO_WEBHOOK_SECRET"),
+    muxSigningKeyId: str(source, "MUX_SIGNING_KEY_ID"),
+    muxSigningPrivateKey: str(source, "MUX_SIGNING_PRIVATE_KEY"),
     pushProvider,
     expoAccessToken: str(source, "EXPO_ACCESS_TOKEN"),
     emailProvider,

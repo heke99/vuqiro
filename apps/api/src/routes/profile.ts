@@ -4,6 +4,7 @@ import { z } from "zod";
 import { badRequest, notFound } from "../lib/errors";
 import { enforceRateLimit } from "../lib/rateLimit";
 import { getServiceDb, isBackendConfigured } from "../lib/supabase";
+import { safeHttpUrl } from "../lib/validation";
 import type { AppEnv } from "../middleware/auth";
 import { attachUser, requireUser } from "../middleware/auth";
 
@@ -65,10 +66,10 @@ profileRoutes.get("/me", requireUser, async (c) => {
 const profilePatch = z.object({
   displayName: z.string().trim().max(80).optional(),
   bio: z.string().trim().max(500).optional(),
-  websiteUrl: z.string().url().nullable().optional(),
+  websiteUrl: safeHttpUrl.nullable().optional(),
   country: z.string().length(2).nullable().optional(),
   language: z.string().min(2).max(8).nullable().optional(),
-  avatarUrl: z.string().url().nullable().optional()
+  avatarUrl: safeHttpUrl.nullable().optional()
 });
 
 profileRoutes.patch("/me", requireUser, async (c) => {
