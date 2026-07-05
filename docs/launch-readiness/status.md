@@ -16,7 +16,7 @@ underlying audit) and the external dependencies that remain after the code is do
 | B6 | Messaging: API routes + mobile inbox/chat | Done |
 | B7 | Ads: advertiser self-serve, CSV exports, daily pacing, promoted labels | Done |
 | B8 | Notifications: email adapter, deep links, dedupe; data-export/deletion workers; rate-limit logging | Done |
-| B9 | Analytics: rollup job, admin analytics page, CSV export | Pending |
+| B9 | Analytics: rollup job, admin analytics page, CSV export | Done |
 | B10 | Security hardening + docs/security.md + permission tests | Pending |
 | B11 | API/env/deployment/launch docs, CI migration validation, final gate | Pending |
 
@@ -201,6 +201,25 @@ underlying audit) and the external dependencies that remain after the code is do
   row per key per minute) with an admin viewer on the Integration health page
   (`GET /admin/rate-limit-events`).
 - Tests: mock email provider, privacy-workers RBAC, rate-limit-events RBAC.
+
+## B9 changes
+
+- Daily analytics rollup job (`apps/api/src/lib/analyticsRollup.ts`):
+  aggregates one UTC day of `feed_impressions` + likes/comments/saves/shares
+  into `video_analytics_daily` and `creator_analytics_daily` (idempotent
+  upserts; follower gains and coin earnings included). Triggered by
+  `POST /admin/ops/analytics/run` (optional `date`, audit-logged, cron-able,
+  button on Integration health + the analytics page).
+- `GET /admin/analytics` rebuilt: `from`/`to` date filters, totals (new users,
+  uploads, published videos, views, watch hours, completions, engagement,
+  reports, moderation actions, revenue, ad impressions/clicks), per-day series
+  from the rollup tables (no raw event scans in the dashboard path), top videos
+  and top creators, plus `format=csv`.
+- New admin `/analytics` page (admin + finance roles): date filters, metric
+  cards, daily series table, top videos/creators, CSV export button (new
+  `platform-analytics` entry in the export proxy allowlist).
+- Tests: rollup RBAC + date validation, analytics totals/series, CSV export
+  (6 new tests). Admin production build verified.
 
 ## Open external dependencies
 

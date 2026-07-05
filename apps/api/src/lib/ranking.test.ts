@@ -208,6 +208,59 @@ describe("ops workers", () => {
     const ok = await app.request("/admin/rate-limit-events", { headers: { authorization: "Bearer admin" } });
     expect(ok.status).toBe(200);
   });
+
+  it("requires admin for the analytics rollup run", async () => {
+    const { createApp } = await import("../app");
+    const app = createApp();
+    const denied = await app.request("/admin/ops/analytics/run", { method: "POST" });
+    expect(denied.status).toBe(401);
+    const ok = await app.request("/admin/ops/analytics/run", {
+      method: "POST",
+      headers: { authorization: "Bearer admin", "content-type": "application/json" },
+      body: JSON.stringify({ date: "2026-07-04" })
+    });
+    expect(ok.status).toBe(200);
+  });
+
+  it("rejects malformed rollup dates", async () => {
+    const { createApp } = await import("../app");
+    const app = createApp();
+    const res = await app.request("/admin/ops/analytics/run", {
+      method: "POST",
+      headers: { authorization: "Bearer admin", "content-type": "application/json" },
+      body: JSON.stringify({ date: "yesterday" })
+    });
+    expect(res.status).toBe(400);
+  });
+});
+
+describe("platform analytics", () => {
+  it("returns totals and a daily series", async () => {
+    const { createApp } = await import("../app");
+    const app = createApp();
+    const res = await app.request("/admin/analytics", { headers: { authorization: "Bearer admin" } });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { totals: { views: number }; series: unknown[] };
+    expect(body.totals.views).toBeGreaterThan(0);
+    expect(body.series.length).toBeGreaterThan(0);
+  });
+
+  it("rejects malformed date filters", async () => {
+    const { createApp } = await import("../app");
+    const app = createApp();
+    const res = await app.request("/admin/analytics?from=notadate", { headers: { authorization: "Bearer admin" } });
+    expect(res.status).toBe(400);
+  });
+
+  it("exports the series as csv", async () => {
+    const { createApp } = await import("../app");
+    const app = createApp();
+    const res = await app.request("/admin/analytics?format=csv", { headers: { authorization: "Bearer admin" } });
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-type")).toContain("text/csv");
+    const text = await res.text();
+    expect(text.split("\r\n")[0]).toContain("date");
+  });
 });
 
 describe("trending snapshot job", () => {

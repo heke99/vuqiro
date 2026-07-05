@@ -8,6 +8,7 @@ import type { AdminRole } from "@vuqiro/types";
  */
 const ROUTE_ACCESS: { prefix: string; roles: AdminRole[] }[] = [
   { prefix: "/dashboard", roles: ["admin", "moderator", "finance", "support"] },
+  { prefix: "/analytics", roles: ["admin", "finance"] },
   { prefix: "/users", roles: ["admin", "moderator", "support"] },
   { prefix: "/creators", roles: ["admin", "moderator", "support"] },
   { prefix: "/videos", roles: ["admin", "moderator"] },

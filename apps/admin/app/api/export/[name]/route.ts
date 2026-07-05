@@ -7,7 +7,8 @@ const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3002";
 const EXPORTS: Record<string, string> = {
   "ads-reporting": "/admin/ads/reporting?format=csv",
   "platform-revenue": "/admin/revenue/platform-ledger?format=csv",
-  "creator-revenue": "/admin/revenue/creator-ledger?format=csv"
+  "creator-revenue": "/admin/revenue/creator-ledger?format=csv",
+  "platform-analytics": "/admin/analytics?format=csv"
 };
 
 /**

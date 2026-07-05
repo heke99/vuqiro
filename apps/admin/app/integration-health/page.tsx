@@ -75,6 +75,7 @@ export default async function IntegrationHealthPage() {
           <AdminApiAction label="Run trending snapshot (weekly)" path="/admin/ops/trending/run" body={{ window: "weekly" }} />
           <AdminApiAction label="Process notification jobs" path="/admin/notifications/process-jobs" />
           <AdminApiAction label="Run privacy workers (exports + deletions)" path="/admin/ops/privacy/run" />
+          <AdminApiAction label="Run analytics rollup (yesterday)" path="/admin/ops/analytics/run" />
         </div>
       </div>
 

@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { Hono } from "hono";
 import { z } from "zod";
 import { mockAuditLogs, mockFeatureFlags, mockNotifications } from "@vuqiro/mock-data";
+import { computeDailyRollups } from "../lib/analyticsRollup";
 import { writeAuditLog } from "../lib/audit";
 import { badRequest, forbidden, notFound } from "../lib/errors";
 import { getHealthReport } from "../lib/health";
@@ -483,6 +484,26 @@ adminOpsRoutes.get("/rate-limit-events", async (c) => {
     .limit(100);
   if (error) throw badRequest(error.message);
   return c.json({ events: data ?? [], source: "db" });
+});
+
+const rollupBody = z.object({ date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional() });
+
+/** Runs the daily analytics rollup (defaults to yesterday UTC). */
+adminOpsRoutes.post("/ops/analytics/run", requireAdmin("platform_superadmin", "admin"), async (c) => {
+  const admin = c.get("admin")!;
+  const body = rollupBody.parse(await c.req.json().catch(() => ({})));
+
+  if (!isBackendConfigured()) {
+    return c.json({ date: body.date ?? "yesterday", videos: 0, creators: 0, source: "mock" });
+  }
+  const result = await computeDailyRollups(body.date);
+  await writeAuditLog(admin, {
+    action: "analytics_rollup_run",
+    targetType: "platform_setting",
+    targetId: `analytics_${result?.date ?? "unknown"}`,
+    summary: `Analytics rollup ${result?.date}: ${result?.videos ?? 0} videos, ${result?.creators ?? 0} creators`
+  });
+  return c.json({ ...result, source: "db" });
 });
 
 /** Runs the privacy workers: data exports + due account deletions. */
