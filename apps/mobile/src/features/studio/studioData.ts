@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { mockCreatorAnalytics, mockMemberships, mockModerationCases, mockPayoutHolds, mockPayouts, mockVideos } from "@vuqiro/mock-data";
 import { apiFetch, isApiConfigured } from "../../services/api/client";
+import { isDemoContentAllowed } from "../../services/data/demoMode";
 
 export type StudioAnalytics = {
   views: number;
@@ -109,6 +110,41 @@ function mockStudio() {
   };
 }
 
+/** Zeroed studio state for production builds when the API is unreachable. */
+function emptyStudio(): ReturnType<typeof mockStudio> {
+  return {
+    analytics: {
+      views: 0,
+      watchTimeHours: 0,
+      completionRate: 0,
+      followersGained: 0,
+      subscribersGained: 0,
+      coinTips: 0,
+      unlockRevenue: 0,
+      subscriptionRevenue: 0,
+      payoutPending: 0,
+      payoutPaid: 0
+    },
+    videos: [],
+    subscribers: { totals: { active: 0, gracePeriod: 0, cancelled: 0 }, byTier: {}, recent: [] },
+    payoutInfo: {
+      account: { status: "not_started", payoutsEnabled: false },
+      payableBalance: 0,
+      pendingBalance: 0,
+      heldBalance: 0,
+      payouts: [],
+      holds: [],
+      minimumPayout: 25
+    },
+    moderation: { warnings: 0, cases: [] }
+  };
+}
+
+/** Demo values outside production; zeroed values in production builds. */
+function studioDefaults(): ReturnType<typeof mockStudio> {
+  return isDemoContentAllowed() ? mockStudio() : emptyStudio();
+}
+
 type CamelSnake<T> = T; // API returns snake_case for some DB fields; normalized below.
 
 function useStudioResource<T>(path: string, mockValue: T, normalize?: (raw: unknown) => T): { data: T; isLive: boolean; reload: () => void } {
@@ -144,13 +180,13 @@ function useStudioResource<T>(path: string, mockValue: T, normalize?: (raw: unkn
 export function useStudioAnalytics() {
   return useStudioResource<StudioAnalytics>(
     "/creators/me/analytics",
-    mockStudio().analytics,
+    studioDefaults().analytics,
     (raw) => (raw as { analytics: StudioAnalytics }).analytics
   );
 }
 
 export function useStudioVideos() {
-  return useStudioResource<StudioVideo[]>("/creators/me/videos", mockStudio().videos, (raw) => {
+  return useStudioResource<StudioVideo[]>("/creators/me/videos", studioDefaults().videos, (raw) => {
     const items = (raw as { items: Record<string, unknown>[] }).items;
     return items.map((item) => ({
       id: String(item.id),
@@ -167,7 +203,7 @@ export function useStudioVideos() {
 }
 
 export function useStudioSubscribers() {
-  return useStudioResource<StudioSubscribers>("/creators/me/subscribers", mockStudio().subscribers, (raw) => {
+  return useStudioResource<StudioSubscribers>("/creators/me/subscribers", studioDefaults().subscribers, (raw) => {
     const data = raw as { totals: StudioSubscribers["totals"]; byTier: Record<string, number>; recent: Record<string, unknown>[] };
     return {
       totals: data.totals,
@@ -183,7 +219,7 @@ export function useStudioSubscribers() {
 }
 
 export function useStudioPayouts() {
-  return useStudioResource<StudioPayoutInfo>("/payouts/me", mockStudio().payoutInfo, (raw) => {
+  return useStudioResource<StudioPayoutInfo>("/payouts/me", studioDefaults().payoutInfo, (raw) => {
     const data = raw as Record<string, unknown>;
     return {
       account: data.account as StudioPayoutInfo["account"],
@@ -210,7 +246,7 @@ export function useStudioPayouts() {
 }
 
 export function useStudioModeration() {
-  return useStudioResource<StudioModeration>("/creators/me/moderation", mockStudio().moderation, (raw) => {
+  return useStudioResource<StudioModeration>("/creators/me/moderation", studioDefaults().moderation, (raw) => {
     const data = raw as { warnings: number; cases: Record<string, unknown>[] };
     return {
       warnings: data.warnings,

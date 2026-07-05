@@ -19,6 +19,7 @@ const eventNames = [
   "video_pause",
   "video_progress",
   "video_complete",
+  "video_qualified_view",
   "video_skip",
   "video_rewatch",
   "video_like",
@@ -40,6 +41,7 @@ const eventNames = [
   "video_unlock_success",
   "report_submit",
   "block_user",
+  "search_performed",
   "upload_started",
   "upload_submitted",
   "admin_action"

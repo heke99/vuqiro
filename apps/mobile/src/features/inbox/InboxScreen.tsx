@@ -4,6 +4,7 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 import { mockNotifications } from "@vuqiro/mock-data";
 import type { AppNotification, NotificationType } from "@vuqiro/types";
 import { apiFetch, isApiConfigured } from "../../services/api/client";
+import { isDemoMode } from "../../services/data/demoMode";
 import { Card } from "../../components/Card";
 import { Screen } from "../../components/Screen";
 import { colors, spacing } from "../../design/theme";
@@ -24,7 +25,7 @@ const iconForType: Record<NotificationType, keyof typeof Ionicons.glyphMap> = {
 };
 
 export function InboxScreen() {
-  const [items, setItems] = useState<AppNotification[]>(mockNotifications);
+  const [items, setItems] = useState<AppNotification[]>(isDemoMode() ? mockNotifications : []);
   const unread = items.filter((item) => !item.isRead).length;
 
   useEffect(() => {

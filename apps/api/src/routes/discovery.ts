@@ -150,6 +150,13 @@ discoveryRoutes.get("/search", async (c) => {
         (creator.category ?? "").toLowerCase().includes(term))
   );
 
+  // Search log doubles as recent-search history (GET/DELETE /me/searches).
+  const resultCount = matchingCreators.length + uniqueVideos.length + hashtags.length;
+  void db
+    .from("search_events")
+    .insert({ profile_id: profile?.id ?? null, query: query.slice(0, 200), result_count: resultCount })
+    .then(() => undefined);
+
   return c.json({ creators: matchingCreators, videos: uniqueVideos, hashtags, source: "db" });
 });
 

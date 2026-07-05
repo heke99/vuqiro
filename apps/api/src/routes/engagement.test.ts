@@ -68,6 +68,48 @@ describe("mutes", () => {
   });
 });
 
+describe("personal collections", () => {
+  it("requires auth for saves, likes, following and searches", async () => {
+    for (const path of ["/me/saves", "/me/likes", "/me/following", "/me/searches"]) {
+      const res = await app.request(path);
+      expect(res.status).toBe(401);
+    }
+  });
+
+  it("serves the caller's collections", async () => {
+    for (const path of ["/me/saves", "/me/likes", "/me/following", "/me/searches"]) {
+      const res = await app.request(path, { headers: userHeaders });
+      expect(res.status).toBe(200);
+    }
+  });
+
+  it("clears search history", async () => {
+    const res = await app.request("/me/searches", { method: "DELETE", headers: userHeaders });
+    expect(res.status).toBe(200);
+  });
+});
+
+describe("public video and followers", () => {
+  it("serves public video metadata without auth", async () => {
+    const res = await app.request("/videos/video_001");
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { video: { id: string } };
+    expect(body.video.id).toBe("video_001");
+  });
+
+  it("404s unknown videos", async () => {
+    const res = await app.request("/videos/does_not_exist");
+    expect(res.status).toBe(404);
+  });
+
+  it("serves a creator's follower list", async () => {
+    const res = await app.request("/creators/creator_001/followers");
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { followers: unknown[] };
+    expect(Array.isArray(body.followers)).toBe(true);
+  });
+});
+
 describe("comment pagination", () => {
   it("returns comments with a nextCursor field", async () => {
     const res = await app.request("/videos/video_001/comments");

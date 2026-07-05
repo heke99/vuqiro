@@ -1,21 +1,62 @@
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
-import React from "react";
-import { StyleSheet, Text, View } from "react-native";
-import { mockCreators, mockVideos } from "@vuqiro/mock-data";
+import React, { useEffect, useState } from "react";
+import { ActivityIndicator, Image, Pressable, StyleSheet, Text, View } from "react-native";
+import type { Creator, Video } from "@vuqiro/types";
 import { Avatar } from "../../components/Avatar";
 import { Badge } from "../../components/Badge";
 import { Button } from "../../components/Button";
 import { Card } from "../../components/Card";
 import { Screen } from "../../components/Screen";
 import { colors, gradients, spacing } from "../../design/theme";
+import { fetchCreatorProfile } from "../../services/data/creatorData";
 import { useSocial } from "../social/SocialContext";
 
 export function CreatorProfileScreen({ creatorId }: { creatorId: string }) {
   const router = useRouter();
   const social = useSocial();
-  const creator = mockCreators.find((item) => item.id === creatorId) ?? mockCreators[0];
-  const videos = mockVideos.filter((video) => video.creatorId === creator.id);
+  const [data, setData] = useState<{ creator: Creator; videos: Video[] } | null | undefined>(undefined);
+
+  useEffect(() => {
+    let active = true;
+    fetchCreatorProfile(creatorId)
+      .then((result) => {
+        if (active) setData(result);
+      })
+      .catch(() => {
+        if (active) setData(null);
+      });
+    return () => {
+      active = false;
+    };
+  }, [creatorId]);
+
+  if (data === undefined) {
+    return (
+      <Screen>
+        <ActivityIndicator color={colors.primary} style={{ marginTop: spacing.xl }} />
+      </Screen>
+    );
+  }
+
+  if (data === null) {
+    return (
+      <Screen>
+        <Button
+          label="Back"
+          variant="ghost"
+          onPress={() => router.back()}
+          style={{ alignSelf: "flex-start", marginBottom: spacing.md }}
+        />
+        <Card style={{ alignItems: "center", gap: spacing.sm, padding: spacing.xl }}>
+          <Text style={styles.name}>Creator not found</Text>
+          <Text style={styles.bio}>This profile may have been removed or is not available right now.</Text>
+        </Card>
+      </Screen>
+    );
+  }
+
+  const { creator, videos } = data;
   const following = social.isFollowing(creator.id);
   const blocked = social.isBlocked(creator.id);
   const onSubscribe = () =>
@@ -91,15 +132,26 @@ export function CreatorProfileScreen({ creatorId }: { creatorId: string }) {
         <Badge label="Premium" tone="secondary" />
         <Badge label="About" />
       </View>
-      {videos.map((video) => (
-        <Card key={video.id} style={styles.videoRow}>
-          <View style={styles.thumb} />
-          <View style={{ flex: 1 }}>
-            <Text style={styles.videoTitle}>{video.caption}</Text>
-            <Text style={styles.videoMeta}>{video.watchCount.toLocaleString()} views • {video.visibility.replaceAll("_", " ")}</Text>
-          </View>
-          {video.isPremium ? <Badge label="Locked" tone="warning" /> : <Badge label="Open" tone="secondary" />}
+      {videos.length === 0 ? (
+        <Card style={{ alignItems: "center", padding: spacing.xl }}>
+          <Text style={styles.videoMeta}>No videos yet.</Text>
         </Card>
+      ) : null}
+      {videos.map((video) => (
+        <Pressable key={video.id} onPress={() => router.push(`/video/${video.id}`)}>
+          <Card style={styles.videoRow}>
+            {video.thumbnailUrl ? (
+              <Image source={{ uri: video.thumbnailUrl }} style={styles.thumb} />
+            ) : (
+              <View style={styles.thumb} />
+            )}
+            <View style={{ flex: 1 }}>
+              <Text style={styles.videoTitle}>{video.caption}</Text>
+              <Text style={styles.videoMeta}>{video.watchCount.toLocaleString()} views • {video.visibility.replaceAll("_", " ")}</Text>
+            </View>
+            {video.isPremium ? <Badge label="Locked" tone="warning" /> : <Badge label="Open" tone="secondary" />}
+          </Card>
+        </Pressable>
       ))}
     </Screen>
   );

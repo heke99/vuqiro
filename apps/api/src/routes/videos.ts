@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { z } from "zod";
 import { mockComments, mockVideos } from "@vuqiro/mock-data";
 import { badRequest, notFound } from "../lib/errors";
+import { blockedCreatorIds, toFeedDto, visibleVideosQuery, type VideoRow } from "../lib/feedQuery";
 import { notifyProfile } from "../lib/notify";
 import { enforceRateLimit } from "../lib/rateLimit";
 import { getServiceDb, isBackendConfigured } from "../lib/supabase";
@@ -102,6 +103,35 @@ videoRoutes.get("/:id/access", requireUser, async (c) => {
     return c.json({ access: true, reason: "membership", playbackUrl: video.playback_url, source: "db" });
   }
   return c.json({ access: false, reason: "subscription_required", source: "db" }, 403);
+});
+
+/**
+ * Public video metadata by id. Applies the same visibility rules as feeds:
+ * locked videos never expose playback here (that requires /:id/access), and
+ * removed/blocked/private content 404s.
+ */
+videoRoutes.get("/:id", async (c) => {
+  const id = idParam.parse(c.req.param("id"));
+
+  if (!isBackendConfigured()) {
+    const video = mockVideos.find((candidate) => candidate.id === id);
+    if (!video) throw notFound("Video not found");
+    return c.json({
+      video: { ...video, playbackUrl: video.visibility === "public" ? video.playbackUrl : undefined },
+      source: "mock"
+    });
+  }
+
+  const profile = c.get("profile");
+  const [hidden, { data, error }] = await Promise.all([
+    blockedCreatorIds(profile?.id),
+    visibleVideosQuery().eq("id", id).maybeSingle()
+  ]);
+  if (error) throw badRequest(error.message);
+  if (!data) throw notFound("Video not found");
+  const row = data as unknown as VideoRow;
+  if (hidden.has(row.creator_id)) throw notFound("Video not found");
+  return c.json({ video: toFeedDto(row), source: "db" });
 });
 
 async function toggleRow(table: "likes" | "saves", profileId: string, videoId: string) {

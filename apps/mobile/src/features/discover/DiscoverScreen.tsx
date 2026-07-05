@@ -1,18 +1,28 @@
 import { useRouter } from "expo-router";
-import React, { useMemo, useState } from "react";
-import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
-import { mockCreators, mockVideos } from "@vuqiro/mock-data";
-import type { Creator } from "@vuqiro/types";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { ActivityIndicator, Image, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { Avatar } from "../../components/Avatar";
 import { Badge } from "../../components/Badge";
 import { Card } from "../../components/Card";
 import { Screen } from "../../components/Screen";
 import { colors, radii, spacing } from "../../design/theme";
+import { isApiConfigured } from "../../services/api/client";
+import {
+  clearRecentSearches,
+  fetchCategories,
+  fetchRecentSearches,
+  fetchTrending,
+  searchAll,
+  type DiscoverCategory,
+  type DiscoverCreator,
+  type DiscoverVideo,
+  type SearchResults,
+  type TrendingData
+} from "../../services/data/discoverData";
 import { useSocial } from "../social/SocialContext";
+import { trackEvent } from "../video/videoEvents";
 
-const categories = ["Music", "Travel", "Tech", "Fitness", "Art", "Food", "Fashion", "Gaming"];
-
-function CreatorRow({ creator, subtitle }: { creator: Creator; subtitle?: string }) {
+function CreatorRow({ creator, subtitle }: { creator: DiscoverCreator; subtitle?: string }) {
   const router = useRouter();
   const social = useSocial();
   const following = social.isFollowing(creator.id);
@@ -41,70 +51,92 @@ function CreatorRow({ creator, subtitle }: { creator: Creator; subtitle?: string
   );
 }
 
+function VideoRow({ video }: { video: DiscoverVideo }) {
+  const router = useRouter();
+  return (
+    <Pressable onPress={() => router.push(`/video/${video.id}`)}>
+      <Card style={styles.videoRow}>
+        {video.thumbnailUrl ? (
+          <Image source={{ uri: video.thumbnailUrl }} style={styles.thumb} />
+        ) : (
+          <View style={styles.thumb} />
+        )}
+        <View style={{ flex: 1 }}>
+          <Text style={styles.videoTitle} numberOfLines={2}>
+            {video.caption}
+          </Text>
+          <Text style={styles.creatorMeta}>
+            {video.watchCount.toLocaleString()} views{video.category ? ` • ${video.category}` : ""}
+          </Text>
+        </View>
+        {video.isPremium ? <Badge label="Premium" /> : null}
+      </Card>
+    </Pressable>
+  );
+}
+
 export function DiscoverScreen() {
   const router = useRouter();
-  const social = useSocial();
   const [query, setQuery] = useState("");
+  const [trending, setTrending] = useState<TrendingData | null>(null);
+  const [categories, setCategories] = useState<DiscoverCategory[]>([]);
+  const [recentSearches, setRecentSearches] = useState<string[]>([]);
+  const [results, setResults] = useState<SearchResults | null>(null);
+  const [searching, setSearching] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
-  const visibleCreators = useMemo(
-    () => mockCreators.filter((creator) => !social.isBlocked(creator.id)),
-    [social]
-  );
-  const visibleVideos = useMemo(
-    () => mockVideos.filter((video) => !social.isBlocked(video.creatorId)),
-    [social]
-  );
+  useEffect(() => {
+    let active = true;
+    Promise.all([fetchTrending(), fetchCategories(), fetchRecentSearches()])
+      .then(([trendingData, categoryData, searches]) => {
+        if (!active) return;
+        setTrending(trendingData);
+        setCategories(categoryData);
+        setRecentSearches(searches);
+        setLoadError(null);
+      })
+      .catch(() => {
+        if (active) setLoadError("Could not load discovery data. Pull to refresh or try again later.");
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
 
-  const trendingHashtags = useMemo(() => {
-    const counts = new Map<string, number>();
-    for (const video of visibleVideos) {
-      for (const tag of video.hashtags) {
-        counts.set(tag, (counts.get(tag) ?? 0) + video.watchCount);
-      }
+  // Debounced live search.
+  useEffect(() => {
+    const term = query.trim();
+    if (!term) {
+      setResults(null);
+      setSearching(false);
+      return;
     }
-    return [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 8);
-  }, [visibleVideos]);
+    setSearching(true);
+    const timeout = setTimeout(async () => {
+      trackEvent("search_performed", { value: term.length });
+      const searchResults = await searchAll(term);
+      setResults(searchResults);
+      setSearching(false);
+      if (isApiConfigured()) {
+        setRecentSearches((current) => [term, ...current.filter((entry) => entry !== term)].slice(0, 10));
+      }
+    }, 350);
+    return () => clearTimeout(timeout);
+  }, [query]);
 
-  const premiumCreators = useMemo(
+  const onClearHistory = useCallback(() => {
+    setRecentSearches([]);
+    void clearRecentSearches();
+  }, []);
+
+  const emptyDiscover = useMemo(
     () =>
-      visibleCreators
-        .filter((creator) => creator.monetizationEnabled && creator.tiersEnabled.length >= 2)
-        .sort((a, b) => (b.subscriberCount ?? 0) - (a.subscriberCount ?? 0))
-        .slice(0, 4),
-    [visibleCreators]
+      trending !== null &&
+      trending.trendingCreators.length === 0 &&
+      trending.topVideos.length === 0 &&
+      trending.trendingHashtags.length === 0,
+    [trending]
   );
-
-  const newCreators = useMemo(
-    () =>
-      [...visibleCreators]
-        .sort((a, b) => (b.createdAt ?? "").localeCompare(a.createdAt ?? ""))
-        .slice(0, 3),
-    [visibleCreators]
-  );
-
-  const topVideos = useMemo(
-    () => [...visibleVideos].sort((a, b) => b.watchCount - a.watchCount).slice(0, 5),
-    [visibleVideos]
-  );
-
-  const results = useMemo(() => {
-    const term = query.trim().toLowerCase().replace(/^#/, "");
-    if (!term) return null;
-    const creators = visibleCreators.filter(
-      (creator) =>
-        creator.handle.toLowerCase().includes(term) ||
-        creator.displayName.toLowerCase().includes(term) ||
-        (creator.category ?? "").toLowerCase().includes(term)
-    );
-    const videos = visibleVideos.filter(
-      (video) =>
-        video.caption.toLowerCase().includes(term) ||
-        (video.category ?? "").toLowerCase().includes(term) ||
-        video.hashtags.some((tag) => tag.toLowerCase().includes(term))
-    );
-    const hashtags = trendingHashtags.filter(([tag]) => tag.toLowerCase().includes(term));
-    return { creators, videos, hashtags };
-  }, [query, visibleCreators, visibleVideos, trendingHashtags]);
 
   return (
     <Screen>
@@ -118,14 +150,37 @@ export function DiscoverScreen() {
         placeholderTextColor={colors.textMuted}
         autoCapitalize="none"
       />
-      {results ? (
+
+      {loadError && !results ? <Text style={styles.errorText}>{loadError}</Text> : null}
+
+      {!results && recentSearches.length > 0 ? (
+        <>
+          <View style={styles.recentHeader}>
+            <Text style={styles.sectionTitle}>Recent searches</Text>
+            <Pressable onPress={onClearHistory}>
+              <Text style={styles.clearText}>Clear</Text>
+            </Pressable>
+          </View>
+          <View style={styles.tagWrap}>
+            {recentSearches.map((entry) => (
+              <Pressable key={entry} onPress={() => setQuery(entry)}>
+                <Badge label={entry} />
+              </Pressable>
+            ))}
+          </View>
+        </>
+      ) : null}
+
+      {searching ? <ActivityIndicator color={colors.primary} style={{ marginTop: spacing.lg }} /> : null}
+
+      {results && !searching ? (
         <View>
           {results.hashtags.length > 0 ? (
             <>
               <Text style={styles.sectionTitle}>Hashtags</Text>
               <View style={styles.tagWrap}>
-                {results.hashtags.map(([tag]) => (
-                  <Pressable key={tag} onPress={() => setQuery(tag)}>
+                {results.hashtags.map((tag) => (
+                  <Pressable key={tag} onPress={() => router.push(`/hashtag/${tag}`)}>
                     <Badge label={`#${tag}`} tone="secondary" />
                   </Pressable>
                 ))}
@@ -140,81 +195,81 @@ export function DiscoverScreen() {
           <Text style={styles.sectionTitle}>Videos</Text>
           {results.videos.length === 0 ? <Text style={styles.empty}>No videos found.</Text> : null}
           {results.videos.map((video) => (
-            <Pressable key={video.id} onPress={() => router.push(`/video/${video.id}`)}>
-              <Card style={styles.videoRow}>
-                <View style={styles.thumb} />
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.videoTitle}>{video.caption}</Text>
-                  <Text style={styles.creatorMeta}>{video.watchCount.toLocaleString()} views</Text>
-                </View>
-                {video.isPremium ? <Badge label="Premium" /> : null}
-              </Card>
-            </Pressable>
+            <VideoRow key={video.id} video={video} />
           ))}
         </View>
-      ) : (
-        <View>
-          <Text style={styles.sectionTitle}>Trending creators</Text>
-          {[...visibleCreators]
-            .sort((a, b) => b.followerCount - a.followerCount)
-            .slice(0, 4)
-            .map((creator) => (
+      ) : null}
+
+      {!results && !searching ? (
+        trending === null ? (
+          <ActivityIndicator color={colors.primary} style={{ marginTop: spacing.xl }} />
+        ) : emptyDiscover ? (
+          <Card style={{ alignItems: "center", gap: spacing.sm, padding: spacing.xl, marginTop: spacing.lg }}>
+            <Text style={styles.emptyTitle}>Nothing trending yet</Text>
+            <Text style={styles.empty}>Check back soon — trends update as people watch and post.</Text>
+          </Card>
+        ) : (
+          <View>
+            <Text style={styles.sectionTitle}>Trending creators</Text>
+            {trending.trendingCreators.map((creator) => (
               <CreatorRow key={creator.id} creator={creator} />
             ))}
 
-          <Text style={styles.sectionTitle}>Trending hashtags</Text>
-          <View style={styles.tagWrap}>
-            {trendingHashtags.map(([tag]) => (
-              <Pressable key={tag} onPress={() => setQuery(tag)}>
-                <Badge label={`#${tag}`} tone="secondary" />
-              </Pressable>
-            ))}
-          </View>
-
-          <Text style={styles.sectionTitle}>Categories</Text>
-          <View style={styles.tagWrap}>
-            {categories.map((category) => (
-              <Pressable key={category} onPress={() => setQuery(category.toLowerCase())}>
-                <Badge label={category} />
-              </Pressable>
-            ))}
-          </View>
-
-          <Text style={styles.sectionTitle}>Premium creators</Text>
-          {premiumCreators.map((creator) => (
-            <CreatorRow
-              key={creator.id}
-              creator={creator}
-              subtitle={`@${creator.handle} • ${creator.subscriberCount.toLocaleString()} subscribers • ${creator.tiersEnabled.length} tiers`}
-            />
-          ))}
-
-          <Text style={styles.sectionTitle}>Top videos</Text>
-          {topVideos.map((video) => (
-            <Pressable key={video.id} onPress={() => router.push(`/video/${video.id}`)}>
-              <Card style={styles.videoRow}>
-                <View style={styles.thumb} />
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.videoTitle}>{video.caption}</Text>
-                  <Text style={styles.creatorMeta}>
-                    {video.watchCount.toLocaleString()} views • {video.category}
-                  </Text>
+            {trending.trendingHashtags.length > 0 ? (
+              <>
+                <Text style={styles.sectionTitle}>Trending hashtags</Text>
+                <View style={styles.tagWrap}>
+                  {trending.trendingHashtags.map((tag) => (
+                    <Pressable key={tag} onPress={() => router.push(`/hashtag/${tag}`)}>
+                      <Badge label={`#${tag}`} tone="secondary" />
+                    </Pressable>
+                  ))}
                 </View>
-                {video.isPremium ? <Badge label="Premium" /> : null}
-              </Card>
-            </Pressable>
-          ))}
+              </>
+            ) : null}
 
-          <Text style={styles.sectionTitle}>New creators</Text>
-          {newCreators.map((creator) => (
-            <CreatorRow
-              key={creator.id}
-              creator={creator}
-              subtitle={`@${creator.handle} • joined ${creator.createdAt ? new Date(creator.createdAt).toLocaleDateString() : "recently"}`}
-            />
-          ))}
-        </View>
-      )}
+            <Text style={styles.sectionTitle}>Categories</Text>
+            <View style={styles.tagWrap}>
+              {categories.map((category) => (
+                <Pressable key={category.id} onPress={() => setQuery(category.label.toLowerCase())}>
+                  <Badge label={category.label} />
+                </Pressable>
+              ))}
+            </View>
+
+            {trending.premiumCreators.length > 0 ? (
+              <>
+                <Text style={styles.sectionTitle}>Premium creators</Text>
+                {trending.premiumCreators.map((creator) => (
+                  <CreatorRow
+                    key={creator.id}
+                    creator={creator}
+                    subtitle={`@${creator.handle} • ${creator.subscriberCount.toLocaleString()} subscribers`}
+                  />
+                ))}
+              </>
+            ) : null}
+
+            <Text style={styles.sectionTitle}>Top videos</Text>
+            {trending.topVideos.map((video) => (
+              <VideoRow key={video.id} video={video} />
+            ))}
+
+            {trending.newCreators.length > 0 ? (
+              <>
+                <Text style={styles.sectionTitle}>New creators</Text>
+                {trending.newCreators.map((creator) => (
+                  <CreatorRow
+                    key={creator.id}
+                    creator={creator}
+                    subtitle={`@${creator.handle} • joined ${creator.createdAt ? new Date(creator.createdAt).toLocaleDateString() : "recently"}`}
+                  />
+                ))}
+              </>
+            ) : null}
+          </View>
+        )
+      ) : null}
     </Screen>
   );
 }
@@ -234,6 +289,8 @@ const styles = StyleSheet.create({
     marginBottom: spacing.lg
   },
   sectionTitle: { color: colors.text, fontWeight: "900", fontSize: 18, marginTop: spacing.lg, marginBottom: spacing.md },
+  recentHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  clearText: { color: colors.secondary, fontWeight: "800", fontSize: 12, marginTop: spacing.lg },
   creatorRow: { flexDirection: "row", alignItems: "center", gap: spacing.md, marginBottom: spacing.sm },
   creatorName: { color: colors.text, fontWeight: "900" },
   creatorMeta: { color: colors.textMuted, fontSize: 12 },
@@ -241,7 +298,9 @@ const styles = StyleSheet.create({
   thumb: { width: 52, height: 66, borderRadius: 14, backgroundColor: colors.primarySoft },
   videoTitle: { color: colors.text, fontWeight: "800" },
   tagWrap: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
-  empty: { color: colors.textMuted, marginBottom: spacing.sm },
+  empty: { color: colors.textMuted, marginBottom: spacing.sm, textAlign: "center" },
+  emptyTitle: { color: colors.text, fontWeight: "900", fontSize: 18 },
+  errorText: { color: colors.danger, marginBottom: spacing.md },
   followChip: {
     paddingHorizontal: spacing.md,
     paddingVertical: 6,

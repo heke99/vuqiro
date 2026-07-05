@@ -3,6 +3,7 @@ import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View, useWind
 import type { ViewToken } from "react-native";
 import { mockCreators } from "@vuqiro/mock-data";
 import { colors, spacing } from "../../design/theme";
+import { isDemoContentAllowed } from "../../services/data/demoMode";
 import { mockFeedEntries, useFeed, type FeedEntry } from "../../services/data/feedData";
 import { endFeedSession, startFeedSession, trackFeedImpression } from "../../services/data/feedTracking";
 import { useSocial } from "../social/SocialContext";
@@ -33,8 +34,13 @@ export function FeedScreen() {
   }, [feedTab]);
 
   const data: FeedEntry[] = useMemo(() => {
-    // Live entries when the API is reachable, mock entries otherwise.
-    const source = liveFeed.isLive || liveFeed.entries.length > 0 ? liveFeed.entries : mockFeedEntries();
+    // Live entries when the API is reachable; demo entries only outside production.
+    const source =
+      liveFeed.isLive || liveFeed.entries.length > 0
+        ? liveFeed.entries
+        : isDemoContentAllowed()
+          ? mockFeedEntries()
+          : [];
     // Blocked/muted creators and not-interested videos are hidden. Ads pass through.
     const visible = source.filter(
       (entry) =>

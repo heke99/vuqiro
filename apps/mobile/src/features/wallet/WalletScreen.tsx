@@ -7,6 +7,7 @@ import { Card } from "../../components/Card";
 import { CoinPackCard } from "../../components/CoinPackCard";
 import { Screen } from "../../components/Screen";
 import { apiFetch, isApiConfigured } from "../../services/api/client";
+import { isDemoMode } from "../../services/data/demoMode";
 import { colors, spacing } from "../../design/theme";
 
 type WalletResponse = {
@@ -17,9 +18,9 @@ type WalletResponse = {
 
 export function WalletScreen() {
   const router = useRouter();
-  const [balance, setBalance] = useState<number>(mockWallet.coinBalance);
+  const [balance, setBalance] = useState<number>(isDemoMode() ? mockWallet.coinBalance : 0);
   const [transactions, setTransactions] = useState<{ id: string; label: string; amount: number }[]>(
-    mockWalletTransactions.map((tx) => ({ id: tx.id, label: tx.label, amount: tx.amount }))
+    isDemoMode() ? mockWalletTransactions.map((tx) => ({ id: tx.id, label: tx.label, amount: tx.amount })) : []
   );
   const [isLive, setIsLive] = useState(false);
 

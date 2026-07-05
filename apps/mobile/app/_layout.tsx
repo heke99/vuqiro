@@ -82,6 +82,10 @@ export default function RootLayout() {
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="creator/[id]" />
         <Stack.Screen name="video/[id]" />
+        <Stack.Screen name="hashtag/[tag]" />
+        <Stack.Screen name="saved-videos" />
+        <Stack.Screen name="liked-videos" />
+        <Stack.Screen name="following-list" />
         <Stack.Screen name="settings" />
         <Stack.Screen name="account-status" />
         <Stack.Screen name="edit-profile" />

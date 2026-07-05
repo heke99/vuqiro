@@ -10,6 +10,7 @@ import { useAuth } from "../../src/features/auth/AuthContext";
 import { useSocial } from "../../src/features/social/SocialContext";
 import { trackEvent } from "../../src/features/video/videoEvents";
 import { apiFetch, isApiConfigured } from "../../src/services/api/client";
+import { isDemoContentAllowed } from "../../src/services/data/demoMode";
 import { colors, radii, spacing } from "../../src/design/theme";
 
 type CommentRowDto = {
@@ -143,7 +144,7 @@ export default function CommentSheet() {
     async (cursor?: string) => {
       const id = videoId ?? "video_001";
       if (!isApiConfigured()) {
-        setComments(mockComments.filter((comment) => comment.videoId === id));
+        setComments(isDemoContentAllowed() ? mockComments.filter((comment) => comment.videoId === id) : []);
         setIsLive(false);
         return;
       }
@@ -168,7 +169,9 @@ export default function CommentSheet() {
         setIsLive(response.source === "db");
       } catch (loadError) {
         setError(loadError instanceof Error ? loadError.message : "Could not load comments");
-        if (!cursor) setComments(mockComments.filter((comment) => comment.videoId === id));
+        if (!cursor && isDemoContentAllowed()) {
+          setComments(mockComments.filter((comment) => comment.videoId === id));
+        }
       } finally {
         setLoading(false);
       }

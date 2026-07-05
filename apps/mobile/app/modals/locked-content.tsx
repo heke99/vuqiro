@@ -1,20 +1,74 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { mockCreators, mockVideos } from "@vuqiro/mock-data";
 import { Button } from "../../src/components/Button";
 import { ModalShell } from "../../src/components/ModalShell";
 import { apiFetch, isApiConfigured } from "../../src/services/api/client";
+import { isDemoContentAllowed } from "../../src/services/data/demoMode";
 import { colors, radii, spacing } from "../../src/design/theme";
+
+type LockedVideoMeta = {
+  id: string;
+  caption: string;
+  visibility: string;
+  coinUnlockPrice?: number;
+  requiredTier?: string;
+  creatorId: string;
+  creatorHandle: string;
+  creatorDisplayName: string;
+};
+
+function demoMeta(videoId?: string): LockedVideoMeta {
+  const video = mockVideos.find((item) => item.id === videoId) ?? mockVideos[1];
+  const creator = mockCreators.find((item) => item.id === video.creatorId) ?? mockCreators[0];
+  return {
+    id: video.id,
+    caption: video.caption,
+    visibility: video.visibility,
+    coinUnlockPrice: video.coinUnlockPrice,
+    requiredTier: video.requiredTier,
+    creatorId: creator.id,
+    creatorHandle: creator.handle,
+    creatorDisplayName: creator.displayName
+  };
+}
 
 export default function LockedContentModal() {
   const router = useRouter();
   const { videoId } = useLocalSearchParams<{ videoId?: string }>();
-  const video = mockVideos.find((item) => item.id === videoId) ?? mockVideos[1];
-  const creator = mockCreators.find((item) => item.id === video.creatorId) ?? mockCreators[0];
-  const isCoinUnlock = video.visibility === "unlock_with_coins";
+  const [meta, setMeta] = useState<LockedVideoMeta | null>(
+    !isApiConfigured() && isDemoContentAllowed() ? demoMeta(videoId) : null
+  );
   const [state, setState] = useState<"idle" | "busy" | "unlocked" | "error">("idle");
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!isApiConfigured() || !videoId) return;
+    let active = true;
+    apiFetch<{ video: LockedVideoMeta }>(`/videos/${videoId}`)
+      .then((response) => {
+        if (active) setMeta(response.video);
+      })
+      .catch(() => {
+        if (active && isDemoContentAllowed()) setMeta(demoMeta(videoId));
+      });
+    return () => {
+      active = false;
+    };
+  }, [videoId]);
+
+  if (!meta) {
+    return (
+      <ModalShell title="Locked content" subtitle="Loading…">
+        <Text style={styles.optionCopy}>Fetching video details…</Text>
+      </ModalShell>
+    );
+  }
+
+  const video = meta;
+  const creator = { id: meta.creatorId, handle: meta.creatorHandle, displayName: meta.creatorDisplayName };
+  const isCoinUnlock = video.visibility === "unlock_with_coins";
 
   const unlock = async () => {
     const id = videoId ?? video.id;

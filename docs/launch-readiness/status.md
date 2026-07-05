@@ -11,7 +11,7 @@ underlying audit) and the external dependencies that remain after the code is do
 | B1 | Schema: mutes, not-interested, featured, rate_limit_events, advertiser linkage, search indexes | Done |
 | B2 | Ranking: configurable weights, real signals, explain endpoint, trending snapshots | Done |
 | B3 | Engagement: not-interested/mute APIs, comment pagination + replies, double-tap like, mute toggle, clipboard | Done |
-| B4 | Mobile wiring: discover/search/hashtag feeds, real profiles, saves/likes/follower lists, production-gated mocks | Pending |
+| B4 | Mobile wiring: discover/search/hashtag feeds, real profiles, saves/likes/follower lists, production-gated mocks | Done |
 | B5 | Watch tracking accuracy + player preloading/posters | Pending |
 | B6 | Messaging: API routes + mobile inbox/chat | Pending |
 | B7 | Ads: advertiser self-serve, CSV exports, daily pacing, promoted labels | Pending |
@@ -92,6 +92,28 @@ underlying audit) and the external dependencies that remain after the code is do
   video detail Like/Save buttons wired to the social context and API.
 - Tests: `engagement.test.ts` (auth, mute validation, rate limiting, pagination
   contract) — 9 new tests.
+
+## B4 changes
+
+- API: `GET /videos/:id` (public metadata, feed visibility rules, no playback for
+  locked content), `GET /creators/:id/followers` (public, paginated, active
+  accounts only), `GET /me/saves`, `GET /me/likes`, `GET /me/following`,
+  `GET/DELETE /me/searches` (recent searches reuse `search_events`; `/search` now
+  logs queries). New analytics event names `search_performed` and
+  `video_qualified_view`.
+- Mobile Discover is fully live: debounced API search, trending/categories from
+  the API, recent searches with clear-history, hashtag chips navigate to a new
+  full-screen vertical hashtag feed (`/hashtag/[tag]`), thumbnails render.
+- Profiles: own profile shows real follower/following/video/like counts from
+  `/me` plus links to new Saved videos, Liked videos and Following screens;
+  public creator profiles and the video detail screen now load live API data with
+  loading/not-found states; locked-content and subscribe modals fetch live
+  metadata.
+- Demo gating: new `src/services/data/demoMode.ts` is the single gate — every
+  mock fallback (feed, discover, creator profile, video detail, inbox, wallet,
+  studio, comments, locked/subscribe modals) is disabled when
+  `EXPO_PUBLIC_APP_ENV=production`, surfacing real error/empty states instead.
+- Tests: collections/public-video/follower endpoints (+8 API tests).
 
 ## Open external dependencies
 
