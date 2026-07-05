@@ -7,6 +7,7 @@ import { Button } from "../../components/Button";
 import { Card } from "../../components/Card";
 import { Screen } from "../../components/Screen";
 import { apiFetch, isApiConfigured } from "../../services/api/client";
+import { useFeatureFlags } from "../../services/data/featureFlags";
 import { trackEvent } from "../video/videoEvents";
 import { colors, radii, spacing } from "../../design/theme";
 
@@ -23,6 +24,7 @@ const tierOptions = ["support", "plus", "premium"] as const;
 const coinPriceOptions = [50, 100, 250] as const;
 
 export function UploadScreen() {
+  const flags = useFeatureFlags();
   const [phase, setPhase] = useState<UploadPhase>("idle");
   const [fileName, setFileName] = useState<string | null>(null);
   const [fileSize, setFileSize] = useState(0);
@@ -148,6 +150,18 @@ export function UploadScreen() {
     under_review: "Uploaded — your video is in moderation review before it appears in feeds.",
     error: "Something went wrong."
   };
+
+  if (!flags.videoUpload) {
+    return (
+      <Screen>
+        <Text style={styles.kicker}>Create</Text>
+        <Text style={styles.title}>Uploads paused</Text>
+        <Text style={styles.subtitle}>
+          Video uploads are temporarily disabled. Check back soon — your drafts and published videos are safe.
+        </Text>
+      </Screen>
+    );
+  }
 
   return (
     <Screen>

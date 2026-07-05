@@ -31,6 +31,7 @@ import { moderationRoutes } from "./routes/moderation";
 import { monetizationRoutes } from "./routes/monetization";
 import { notificationRoutes } from "./routes/notifications";
 import { payoutRoutes } from "./routes/payouts";
+import { platformRoutes } from "./routes/platform";
 import { uploadRoutes } from "./routes/uploads";
 import { videoRoutes } from "./routes/videos";
 import { videoWebhookRoutes } from "./routes/videoWebhooks";
@@ -101,6 +102,7 @@ export function createApp() {
   app.route("/", payoutRoutes); // /payouts/*, POST /admin/payouts/batch
   app.route("/", notificationRoutes); // /notifications, /notifications/read, /notifications/preferences
   app.route("/", legalRoutes); // /legal/documents, /legal/accept, /legal/acceptances
+  app.route("/", platformRoutes); // GET /feature-flags (public, client-safe view)
   app.route("/admin", adminModerationRoutes); // moderation case detail + decisions
   app.route("/admin", adminFraudRoutes); // fraud signals
   app.route("/admin", adminAdsRoutes); // ads suite + platform revenue ledger
