@@ -13,7 +13,7 @@ underlying audit) and the external dependencies that remain after the code is do
 | B3 | Engagement: not-interested/mute APIs, comment pagination + replies, double-tap like, mute toggle, clipboard | Done |
 | B4 | Mobile wiring: discover/search/hashtag feeds, real profiles, saves/likes/follower lists, production-gated mocks | Done |
 | B5 | Watch tracking accuracy + player preloading/posters | Done |
-| B6 | Messaging: API routes + mobile inbox/chat | Pending |
+| B6 | Messaging: API routes + mobile inbox/chat | Done |
 | B7 | Ads: advertiser self-serve, CSV exports, daily pacing, promoted labels | Pending |
 | B8 | Notifications: email adapter, deep links, dedupe; data-export/deletion workers; rate-limit logging | Pending |
 | B9 | Analytics: rollup job, admin analytics page, CSV export | Pending |
@@ -128,6 +128,28 @@ underlying audit) and the external dependencies that remain after the code is do
   swipe); neighbouring feed items keep pre-created paused players
   (windowSize 5), so the next video starts instantly.
 - `computeWatchOutcome` extracted and unit-tested (3 new tests).
+
+## B6 changes
+
+- Migration `20260705140000_messaging_completion.sql`: messages became reportable
+  (`reports`/`moderation_cases` target type checks), `new_message` notification
+  type + `notification_preferences.messages` toggle,
+  `conversations.last_message_at` for ordering.
+- New API surface `/messages/*` over the existing tables: conversation list with
+  other-member profile, last message and unread state; open/create direct
+  conversations (by profile id or creator id); paginated thread fetch; send
+  (4000-char cap, rate limited, re-checks permissions each send); mark-read.
+  Server-side rules: blocks in either direction always win;
+  `user_safety_settings.who_can_message` is the single source of truth
+  (`everyone`/`followers`/`no_one` — followers requires following the recipient's
+  creator account); removed messages render as placeholders; recipients get a
+  `new_message` notification honoring their preferences.
+- Mobile: Inbox now has Notifications | Messages tabs with unread badges; new
+  chat screen (`/messages/[id]`) with optimistic sends, rollback, light polling
+  and report action; "Message" button on creator profiles opens or creates the
+  conversation; notification preferences include Direct messages.
+- Tests: `messages.test.ts` (auth on all routes, open/create, validation, rate
+  limiting, message reports) — 7 new tests.
 
 ## Open external dependencies
 

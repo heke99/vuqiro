@@ -74,7 +74,7 @@ notificationRoutes.get("/notifications/preferences", requireUser, async (c) => {
   const db = getServiceDb()!;
   const { data } = await db
     .from("notification_preferences")
-    .select("followers, comments, creator_updates, purchases, payouts, moderation, system, push_enabled")
+    .select("followers, comments, creator_updates, purchases, payouts, moderation, system, messages, push_enabled")
     .eq("profile_id", profile.id)
     .maybeSingle();
 
@@ -87,6 +87,7 @@ notificationRoutes.get("/notifications/preferences", requireUser, async (c) => {
       payouts: true,
       moderation: true,
       system: true,
+      messages: true,
       push_enabled: false
     },
     source: "db"
@@ -101,6 +102,7 @@ const preferencesBody = z.object({
   payouts: z.boolean().optional(),
   moderation: z.boolean().optional(),
   system: z.boolean().optional(),
+  messages: z.boolean().optional(),
   pushEnabled: z.boolean().optional(),
   pushToken: z.string().max(256).optional()
 });
@@ -122,6 +124,7 @@ notificationRoutes.post("/notifications/preferences", requireUser, async (c) => 
   if (body.payouts !== undefined) update.payouts = body.payouts;
   if (body.moderation !== undefined) update.moderation = body.moderation;
   if (body.system !== undefined) update.system = body.system;
+  if (body.messages !== undefined) update.messages = body.messages;
   if (body.pushEnabled !== undefined) update.push_enabled = body.pushEnabled;
   if (body.pushToken !== undefined) update.push_token = body.pushToken;
 

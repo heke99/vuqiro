@@ -12,7 +12,7 @@ export const moderationRoutes = new Hono<AppEnv>();
 moderationRoutes.use("*", attachUser);
 
 const reportBody = z.object({
-  targetType: z.enum(["video", "comment", "profile", "creator"]),
+  targetType: z.enum(["video", "comment", "profile", "creator", "message"]),
   targetId: z.string().min(1).max(64),
   reason: z.enum([
     "harassment",

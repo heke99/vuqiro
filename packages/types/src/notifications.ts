@@ -12,7 +12,8 @@ export type NotificationType =
   | "video_unlocked"
   | "payout_status"
   | "moderation_warning"
-  | "system_notice";
+  | "system_notice"
+  | "new_message";
 
 export type AppNotification = {
   id: ID;
@@ -35,5 +36,6 @@ export type NotificationPreferences = {
   payouts: boolean;
   moderation: boolean;
   system: boolean;
+  messages: boolean;
   pushEnabled: boolean;
 };

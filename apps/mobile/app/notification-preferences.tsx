@@ -7,7 +7,16 @@ import { Screen } from "../src/components/Screen";
 import { apiFetch, isApiConfigured } from "../src/services/api/client";
 import { colors, spacing } from "../src/design/theme";
 
-type PrefKey = "followers" | "comments" | "creatorUpdates" | "purchases" | "payouts" | "moderation" | "system" | "pushEnabled";
+type PrefKey =
+  | "followers"
+  | "comments"
+  | "creatorUpdates"
+  | "purchases"
+  | "payouts"
+  | "moderation"
+  | "system"
+  | "messages"
+  | "pushEnabled";
 
 const prefLabels: { key: PrefKey; label: string; copy: string }[] = [
   { key: "followers", label: "New followers", copy: "When someone follows you" },
@@ -17,6 +26,7 @@ const prefLabels: { key: PrefKey; label: string; copy: string }[] = [
   { key: "payouts", label: "Payouts", copy: "Payout status changes (creators only)" },
   { key: "moderation", label: "Moderation", copy: "Safety notices about your content" },
   { key: "system", label: "System notices", copy: "Important platform announcements" },
+  { key: "messages", label: "Direct messages", copy: "New messages in your inbox" },
   { key: "pushEnabled", label: "Push notifications", copy: "Deliver notifications to this device" }
 ];
 
@@ -30,6 +40,7 @@ export default function NotificationPreferencesScreen() {
     payouts: true,
     moderation: true,
     system: true,
+    messages: true,
     pushEnabled: false
   });
   const [status, setStatus] = useState<string | null>(null);
@@ -47,6 +58,7 @@ export default function NotificationPreferencesScreen() {
           payouts: raw.payouts ?? true,
           moderation: raw.moderation ?? true,
           system: raw.system ?? true,
+          messages: raw.messages ?? true,
           pushEnabled: raw.push_enabled ?? raw.pushEnabled ?? false
         });
       })

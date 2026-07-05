@@ -25,6 +25,7 @@ import { eventRoutes } from "./routes/events";
 import { feedRoutes } from "./routes/feed";
 import { feedSessionRoutes } from "./routes/feedSessions";
 import { legalRoutes } from "./routes/legal";
+import { messageRoutes } from "./routes/messages";
 import { privacyRoutes } from "./routes/privacy";
 import { profileRoutes } from "./routes/profile";
 import { moderationRoutes } from "./routes/moderation";
@@ -103,6 +104,7 @@ export function createApp() {
   app.route("/", notificationRoutes); // /notifications, /notifications/read, /notifications/preferences
   app.route("/", legalRoutes); // /legal/documents, /legal/accept, /legal/acceptances
   app.route("/", platformRoutes); // GET /feature-flags (public, client-safe view)
+  app.route("/messages", messageRoutes); // conversations + direct messages
   app.route("/admin", adminModerationRoutes); // moderation case detail + decisions
   app.route("/admin", adminFraudRoutes); // fraud signals
   app.route("/admin", adminAdsRoutes); // ads suite + platform revenue ledger

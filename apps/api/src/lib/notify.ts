@@ -14,7 +14,8 @@ const preferenceKeyByType: Record<NotificationType, string> = {
   video_unlocked: "purchases",
   payout_status: "payouts",
   moderation_warning: "moderation",
-  system_notice: "system"
+  system_notice: "system",
+  new_message: "messages"
 };
 
 /**
@@ -36,7 +37,7 @@ export async function notifyProfile(params: {
   const prefKey = preferenceKeyByType[params.type];
   const { data: prefs } = await db
     .from("notification_preferences")
-    .select("followers, comments, creator_updates, purchases, payouts, moderation, system")
+    .select("followers, comments, creator_updates, purchases, payouts, moderation, system, messages")
     .eq("profile_id", params.profileId)
     .maybeSingle();
   if (prefs && prefKey in prefs && (prefs as Record<string, boolean>)[prefKey] === false) {
