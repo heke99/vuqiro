@@ -201,9 +201,55 @@ end
 \$\$;
 "
 
+echo "==> Launch gap closure schema assertions"
+run_sql "$DB_NAME" "
+do \$\$
+begin
+  -- New tables exist.
+  perform 1 from pg_tables where schemaname = 'public' and tablename in (
+    'mutes','video_not_interested','rate_limit_events'
+  ) having count(*) = 3;
+  if not found then
+    raise exception 'launch gap closure tables are missing';
+  end if;
+
+  -- New columns exist.
+  if not exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'videos' and column_name = 'is_featured'
+  ) then
+    raise exception 'videos.is_featured missing';
+  end if;
+  if not exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'advertisers' and column_name = 'owner_profile_id'
+  ) then
+    raise exception 'advertisers.owner_profile_id missing';
+  end if;
+  if not exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'notification_jobs' and column_name = 'provider_message_id'
+  ) then
+    raise exception 'notification_jobs.provider_message_id missing';
+  end if;
+
+  -- Trigram search indexes exist.
+  perform 1 from pg_indexes where schemaname = 'public' and indexname in (
+    'videos_caption_trgm_idx','profiles_handle_trgm_idx','profiles_display_name_trgm_idx',
+    'hashtags_tag_trgm_idx','sounds_title_trgm_idx'
+  ) having count(*) = 5;
+  if not found then
+    raise exception 'trigram search indexes are missing';
+  end if;
+
+  raise notice 'launch gap closure schema assertions passed';
+end
+\$\$;
+"
+
 TABLE_COUNT=$("$PSQL" -t -A -d "$DB_NAME" -c "select count(*) from pg_tables where schemaname='public'")
-if [ "$TABLE_COUNT" -lt 89 ]; then
-  echo "ERROR: expected at least 89 public tables, found $TABLE_COUNT" >&2
+if [ "$TABLE_COUNT" -lt 92 ]; then
+  echo "ERROR: expected at least 92 public tables, found $TABLE_COUNT" >&2
   exit 1
 fi
 echo "==> OK: migrations applied cleanly. public tables: $TABLE_COUNT (all with RLS enabled)"

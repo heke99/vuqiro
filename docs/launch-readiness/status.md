@@ -8,7 +8,7 @@ underlying audit) and the external dependencies that remain after the code is do
 | Batch | Scope | Status |
 |---|---|---|
 | B0 | Audit docs, admin readiness page fix, public feature-flags endpoint | Done |
-| B1 | Schema: mutes, not-interested, featured, rate_limit_events, advertiser linkage, search indexes | Pending |
+| B1 | Schema: mutes, not-interested, featured, rate_limit_events, advertiser linkage, search indexes | Done |
 | B2 | Ranking: configurable weights, real signals, explain endpoint, trending snapshots | Pending |
 | B3 | Engagement: not-interested/mute APIs, comment pagination + replies, double-tap like, mute toggle, clipboard | Pending |
 | B4 | Mobile wiring: discover/search/hashtag feeds, real profiles, saves/likes/follower lists, production-gated mocks | Pending |
@@ -34,6 +34,21 @@ underlying audit) and the external dependencies that remain after the code is do
   `apps/mobile/src/services/data/featureFlags.ts` and the upload screen now respects
   the `video_upload` flag. Deleted the dead hardcoded
   `apps/mobile/src/config/featureFlags.ts`.
+
+## B1 changes
+
+- New migration `20260705120000_launch_gap_closure.sql` (schema now 92 tables, all
+  with RLS): `mutes`, `video_not_interested`, `rate_limit_events`,
+  `videos.is_featured/featured_at/featured_by`, `advertisers.owner_profile_id`,
+  `notification_jobs.provider_message_id`, `pg_trgm` search indexes on captions,
+  handles, display names, hashtags and sound titles. Owner-scoped policies for the
+  new user tables; admin-read for rate-limit events.
+- `scripts/validate-migrations.sh` extended with launch-gap-closure assertions
+  (new tables, columns, trigram indexes; table floor raised to 92). Verified green
+  against local Postgres 16.
+- Seed: one featured video, one mute, one not-interested row.
+- Canonical schema documentation added at `docs/database.md`; the stale
+  `docs/architecture/database-schema.md` now points to it.
 
 ## Open external dependencies
 

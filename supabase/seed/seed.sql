@@ -422,3 +422,31 @@ insert into public.integration_health_checks (provider, status, message) values
 insert into public.notifications (profile_id, type, title, body)
 select p.id, 'system_notice', 'Welcome to Vuqiro', 'Your account is ready — start exploring the feed.'
 from public.profiles p where p.handle = 'vuqiro_viewer';
+
+-- ===========================================================================
+-- Launch gap closure seed additions
+-- ===========================================================================
+
+-- One featured video so curation surfaces render immediately.
+update public.videos v
+set is_featured = true,
+    featured_at = now(),
+    featured_by = (select id from public.admin_users where role = 'platform_superadmin' limit 1)
+where v.id = (select id from public.videos order by created_at limit 1);
+
+-- Viewer mutes one creator (soft hide) so mute filtering is exercisable.
+insert into public.mutes (muter_id, muted_profile_id)
+select viewer.id, muted.id
+from public.profiles viewer, public.profiles muted
+where viewer.handle = 'vuqiro_viewer' and muted.handle = 'riven'
+on conflict do nothing;
+
+-- Viewer marked one video not interested (negative ranking signal).
+insert into public.video_not_interested (profile_id, video_id)
+select p.id, v.id
+from public.profiles p
+join public.creators c on c.profile_id = (select id from public.profiles where handle = 'riven')
+join public.videos v on v.creator_id = c.id
+where p.handle = 'vuqiro_viewer'
+limit 1
+on conflict do nothing;
