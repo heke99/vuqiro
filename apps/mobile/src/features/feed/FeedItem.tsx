@@ -38,7 +38,8 @@ export function FeedItem({
   height,
   isActive,
   muted = false,
-  onToggleMute
+  onToggleMute,
+  onWatchComplete
 }: {
   video: Video;
   creator: Creator;
@@ -46,6 +47,8 @@ export function FeedItem({
   isActive: boolean;
   muted?: boolean;
   onToggleMute?: () => void;
+  /** Fires when playback reaches the end (used for accurate watch metrics). */
+  onWatchComplete?: () => void;
 }) {
   const router = useRouter();
   const social = useSocial();
@@ -108,7 +111,10 @@ export function FeedItem({
             trackEvent("video_progress", { videoId: video.id, value: seconds });
           }
         }}
-        onComplete={() => trackEvent("video_complete", { videoId: video.id })}
+        onComplete={() => {
+          trackEvent("video_complete", { videoId: video.id });
+          onWatchComplete?.();
+        }}
         onError={() => trackEvent("video_pause", { videoId: video.id })}
       />
 

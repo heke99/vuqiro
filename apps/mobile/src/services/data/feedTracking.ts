@@ -7,6 +7,18 @@ import { apiFetch, isApiConfigured } from "../api/client";
 
 let currentSessionId: string | null = null;
 
+/** A view under this watch time (without completing) counts as a quick skip. */
+export const QUICK_SKIP_THRESHOLD_MS = 2000;
+
+/** Classifies a finished watch for analytics + ranking signals. */
+export function computeWatchOutcome(
+  watchedMs: number,
+  completed: boolean
+): { skippedQuickly: boolean; qualifiedView: boolean } {
+  const skippedQuickly = watchedMs < QUICK_SKIP_THRESHOLD_MS && !completed;
+  return { skippedQuickly, qualifiedView: !skippedQuickly };
+}
+
 type ImpressionPayload = {
   sessionId?: string;
   videoId?: string;

@@ -1,7 +1,7 @@
 import { useEventListener } from "expo";
 import { useVideoPlayer, VideoView } from "expo-video";
 import React, { useEffect, useRef, useState } from "react";
-import { StyleSheet, View } from "react-native";
+import { Image, StyleSheet, View } from "react-native";
 import { MockVideoPlayer } from "./MockVideoPlayer";
 import type { VideoPlayerProps } from "./videoTypes";
 
@@ -24,6 +24,7 @@ export function VideoPlayer(props: VideoPlayerProps) {
 
 function NativeVideoPlayer({
   playbackUrl,
+  thumbnailUrl,
   isActive = false,
   muted = false,
   loop = true,
@@ -37,8 +38,12 @@ function NativeVideoPlayer({
     instance.muted = muted;
   });
   const progressInterval = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [showPoster, setShowPoster] = useState(Boolean(thumbnailUrl));
 
   useEventListener(player, "statusChange", ({ status, error }) => {
+    if (status === "readyToPlay") {
+      setShowPoster(false);
+    }
     if (status === "error") {
       onError?.(error?.message ?? "Video playback failed");
       onFatalError();
@@ -74,6 +79,11 @@ function NativeVideoPlayer({
   return (
     <View style={StyleSheet.absoluteFill}>
       <VideoView player={player} style={StyleSheet.absoluteFill} contentFit="cover" nativeControls={false} />
+      {showPoster && thumbnailUrl ? (
+        // Poster keeps the frame filled while the stream buffers, so swipes
+        // to preloaded neighbours never show a black flash.
+        <Image source={{ uri: thumbnailUrl }} style={StyleSheet.absoluteFill} resizeMode="cover" />
+      ) : null}
     </View>
   );
 }

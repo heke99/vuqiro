@@ -5,7 +5,12 @@ import { mockCreators } from "@vuqiro/mock-data";
 import { colors, spacing } from "../../design/theme";
 import { isDemoContentAllowed } from "../../services/data/demoMode";
 import { mockFeedEntries, useFeed, type FeedEntry } from "../../services/data/feedData";
-import { endFeedSession, startFeedSession, trackFeedImpression } from "../../services/data/feedTracking";
+import {
+  computeWatchOutcome,
+  endFeedSession,
+  startFeedSession,
+  trackFeedImpression
+} from "../../services/data/feedTracking";
 import { useSocial } from "../social/SocialContext";
 import { trackEvent } from "../video/videoEvents";
 import { FeedItem } from "./FeedItem";
@@ -25,13 +30,49 @@ export function FeedScreen() {
   const [muted, setMuted] = useState(false);
   const liveFeed = useFeed(feedTab);
 
+  // Accurate watch accounting: one open "watch" per active video, finalized
+  // when the viewer moves on (watchedMs, completion, quick-skip signals).
+  const watchRef = useRef<{ videoId: string; index: number; startedAt: number; completed: boolean } | null>(null);
+
+  const finalizeWatch = useCallback(() => {
+    const watch = watchRef.current;
+    if (!watch) return;
+    watchRef.current = null;
+    const watchedMs = Date.now() - watch.startedAt;
+    const { skippedQuickly } = computeWatchOutcome(watchedMs, watch.completed);
+    if (skippedQuickly) {
+      trackEvent("video_skip", { videoId: watch.videoId, value: watchedMs / 1000 });
+    } else {
+      trackEvent("video_qualified_view", { videoId: watch.videoId, value: watchedMs / 1000 });
+    }
+    trackFeedImpression({
+      videoId: watch.videoId,
+      position: watch.index,
+      watchedMs,
+      completed: watch.completed,
+      skippedQuickly,
+      source: "feed"
+    });
+  }, []);
+
+  const beginWatch = useCallback((videoId: string, index: number) => {
+    watchRef.current = { videoId, index, startedAt: Date.now(), completed: false };
+  }, []);
+
+  const markWatchCompleted = useCallback((videoId: string) => {
+    if (watchRef.current?.videoId === videoId) {
+      watchRef.current.completed = true;
+    }
+  }, []);
+
   useEffect(() => {
     trackEvent("feed_view");
     void startFeedSession(feedTab);
     return () => {
+      finalizeWatch();
       void endFeedSession(0);
     };
-  }, [feedTab]);
+  }, [feedTab, finalizeWatch]);
 
   const data: FeedEntry[] = useMemo(() => {
     // Live entries when the API is reachable; demo entries only outside production.
@@ -69,9 +110,12 @@ export function FeedScreen() {
     if (visible && typeof visible.index === "number") {
       setActiveIndex(visible.index);
       const item = visible.item as FeedEntry;
-      if (item.kind === "video") {
+      if (watchRef.current?.videoId !== (item.kind === "video" ? item.video.id : undefined)) {
+        finalizeWatch();
+      }
+      if (item.kind === "video" && watchRef.current === null) {
         trackEvent("video_impression", { videoId: item.video.id, creatorId: item.video.creatorId });
-        trackFeedImpression({ videoId: item.video.id, position: visible.index, source: "feed" });
+        beginWatch(item.video.id, visible.index);
       }
       // Ad impressions are billed server-side and sent by SponsoredAdCard.
     }
@@ -90,10 +134,11 @@ export function FeedScreen() {
           isActive={index === activeIndex}
           muted={muted}
           onToggleMute={() => setMuted((value) => !value)}
+          onWatchComplete={() => markWatchCompleted(item.video.id)}
         />
       );
     },
-    [height, activeIndex, muted]
+    [height, activeIndex, muted, markWatchCompleted]
   );
 
   const isEmpty = data.length === 0 && !liveFeed.loading;

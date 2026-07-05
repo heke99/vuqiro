@@ -12,7 +12,7 @@ underlying audit) and the external dependencies that remain after the code is do
 | B2 | Ranking: configurable weights, real signals, explain endpoint, trending snapshots | Done |
 | B3 | Engagement: not-interested/mute APIs, comment pagination + replies, double-tap like, mute toggle, clipboard | Done |
 | B4 | Mobile wiring: discover/search/hashtag feeds, real profiles, saves/likes/follower lists, production-gated mocks | Done |
-| B5 | Watch tracking accuracy + player preloading/posters | Pending |
+| B5 | Watch tracking accuracy + player preloading/posters | Done |
 | B6 | Messaging: API routes + mobile inbox/chat | Pending |
 | B7 | Ads: advertiser self-serve, CSV exports, daily pacing, promoted labels | Pending |
 | B8 | Notifications: email adapter, deep links, dedupe; data-export/deletion workers; rate-limit logging | Pending |
@@ -114,6 +114,20 @@ underlying audit) and the external dependencies that remain after the code is do
   studio, comments, locked/subscribe modals) is disabled when
   `EXPO_PUBLIC_APP_ENV=production`, surfacing real error/empty states instead.
 - Tests: collections/public-video/follower endpoints (+8 API tests).
+
+## B5 changes
+
+- The feed now keeps one open "watch" per active video and finalizes it when the
+  viewer moves on (or leaves the feed): `feed_impressions` rows carry real
+  `watchedMs`, `completed` and `skippedQuickly` values instead of empty
+  impressions at view start.
+- New client events: `video_qualified_view` (≥2s or completed) and `video_skip`
+  (<2s, not completed) flow into the `/events` pipeline that feeds the ranking
+  engine; completion is reported by the player through `onWatchComplete`.
+- Player: poster thumbnails render while the stream buffers (no black flash on
+  swipe); neighbouring feed items keep pre-created paused players
+  (windowSize 5), so the next video starts instantly.
+- `computeWatchOutcome` extracted and unit-tested (3 new tests).
 
 ## Open external dependencies
 
