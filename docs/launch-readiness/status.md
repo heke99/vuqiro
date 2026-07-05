@@ -15,7 +15,7 @@ underlying audit) and the external dependencies that remain after the code is do
 | B5 | Watch tracking accuracy + player preloading/posters | Done |
 | B6 | Messaging: API routes + mobile inbox/chat | Done |
 | B7 | Ads: advertiser self-serve, CSV exports, daily pacing, promoted labels | Done |
-| B8 | Notifications: email adapter, deep links, dedupe; data-export/deletion workers; rate-limit logging | Pending |
+| B8 | Notifications: email adapter, deep links, dedupe; data-export/deletion workers; rate-limit logging | Done |
 | B9 | Analytics: rollup job, admin analytics page, CSV export | Pending |
 | B10 | Security hardening + docs/security.md + permission tests | Pending |
 | B11 | API/env/deployment/launch docs, CI migration validation, final gate | Pending |
@@ -174,6 +174,34 @@ underlying audit) and the external dependencies that remain after the code is do
 - Tests: advertiser scoping/validation/transitions + CSV auth (9 new tests);
   admin production build verified with the new middleware.
 
+## B8 changes
+
+- Email provider adapter in `packages/services` (Resend + mock, provider
+  pattern identical to push/video/payouts): `EMAIL_PROVIDER`, `RESEND_API_KEY`,
+  `EMAIL_FROM` env vars, health check included in `/health?deep=1` and the
+  integration-health console (new `email` provider in the health snapshot
+  constraint via migration `20260705150000_ops_email.sql`). Missing email in
+  production is a warning, not a boot blocker.
+- The notification job runner now processes the `email` channel: recipient
+  addresses resolve through the Supabase auth admin API (never stored on
+  profiles), receipts store `provider_message_id`, retries up to 3 attempts.
+- `notifyProfile` now dedupes repeats (same type + same related profile/video
+  within an hour collapses to one notification) and fans out to
+  `notification_jobs`: push when the user enabled it, email for payout,
+  moderation and system/security notices.
+- Mobile inbox deep links: notifications open their video, payout notices open
+  the studio payouts screen, message notices switch to the Messages tab.
+- Privacy workers (`apps/api/src/lib/privacyWorkers.ts`): data exports build a
+  full JSON bundle into the private `legal-exports` bucket and flip
+  `data_exports` to `ready` with a 7-day expiry; account deletions past their
+  30-day window anonymize the profile, soft-delete videos and deactivate push
+  tokens. Triggered by `POST /admin/ops/privacy/run` (audit-logged, cron-able,
+  button on Integration health).
+- Rate-limit violations now persist to `rate_limit_events` (throttled to one
+  row per key per minute) with an admin viewer on the Integration health page
+  (`GET /admin/rate-limit-events`).
+- Tests: mock email provider, privacy-workers RBAC, rate-limit-events RBAC.
+
 ## Open external dependencies
 
 These cannot be closed from code and require owner action:
@@ -186,6 +214,6 @@ These cannot be closed from code and require owner action:
 | Stripe account + Connect | Creator payouts | `docs/architecture/stripe-connect-payouts.md` |
 | Apple Developer / Google Play accounts | Store submission | `docs/app-store/` |
 | Expo/EAS account (+ optional `EXPO_ACCESS_TOKEN`) | Builds, push notifications | `docs/implementation/eas-builds.md` |
-| Email provider key (Resend) | Email notifications (adapter added in B8) | `docs/env.md` (B11) |
+| Email provider key (`EMAIL_PROVIDER=resend`, `RESEND_API_KEY`, `EMAIL_FROM`) | Email notifications | `.env.example` |
 | Sentry DSN | Error monitoring | `.env.example` |
 | Legal counsel review of `docs/legal/` outlines | Published legal pages | `docs/legal/` |

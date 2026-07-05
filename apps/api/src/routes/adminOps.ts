@@ -6,6 +6,7 @@ import { writeAuditLog } from "../lib/audit";
 import { badRequest, forbidden, notFound } from "../lib/errors";
 import { getHealthReport } from "../lib/health";
 import { PLATFORM_SETTING_DEFAULTS, resetPlatformSettingsCache } from "../lib/platformSettings";
+import { processAccountDeletions, processDataExports } from "../lib/privacyWorkers";
 import { processNotificationJobs } from "../lib/pushDelivery";
 import { getServiceDb, isBackendConfigured } from "../lib/supabase";
 import { computeTrendSnapshots } from "../lib/trending";
@@ -295,7 +296,7 @@ adminOpsRoutes.put("/platform-settings/:key", requireAdmin("platform_superadmin"
 
 adminOpsRoutes.get("/integration-health", async (c) => {
   const report = await getHealthReport({ deep: c.req.query("deep") === "1" });
-  const checks = [report.database, report.video, report.payments, report.payouts, report.push];
+  const checks = [report.database, report.video, report.payments, report.payouts, report.push, report.email];
 
   // Persist a snapshot so history is visible even after incidents resolve.
   if (isBackendConfigured()) {
@@ -468,6 +469,37 @@ adminOpsRoutes.post("/notifications/process-jobs", requireAdmin("platform_supera
 // ---------------------------------------------------------------------------
 // Trending snapshots (also invocable by an external cron)
 // ---------------------------------------------------------------------------
+
+/** Recent persisted rate-limit violations (ops visibility). */
+adminOpsRoutes.get("/rate-limit-events", async (c) => {
+  if (!isBackendConfigured()) {
+    return c.json({ events: [], source: "mock" });
+  }
+  const db = getServiceDb()!;
+  const { data, error } = await db
+    .from("rate_limit_events")
+    .select("*")
+    .order("created_at", { ascending: false })
+    .limit(100);
+  if (error) throw badRequest(error.message);
+  return c.json({ events: data ?? [], source: "db" });
+});
+
+/** Runs the privacy workers: data exports + due account deletions. */
+adminOpsRoutes.post("/ops/privacy/run", requireAdmin("platform_superadmin", "admin"), async (c) => {
+  const admin = c.get("admin")!;
+  if (!isBackendConfigured()) {
+    return c.json({ exports: { processed: 0 }, deletions: { processed: 0 }, source: "mock" });
+  }
+  const [exports, deletions] = [await processDataExports(), await processAccountDeletions()];
+  await writeAuditLog(admin, {
+    action: "privacy_workers_run",
+    targetType: "platform_setting",
+    targetId: "privacy_workers",
+    summary: `Privacy workers: ${exports.ready} exports ready, ${deletions.completed} deletions completed`
+  });
+  return c.json({ exports, deletions, source: "db" });
+});
 
 const trendingBody = z.object({ window: z.enum(["daily", "weekly"]).default("daily") });
 

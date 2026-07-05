@@ -187,6 +187,29 @@ describe("ranking inspector endpoint", () => {
   });
 });
 
+describe("ops workers", () => {
+  it("requires admin for the privacy workers run", async () => {
+    const { createApp } = await import("../app");
+    const app = createApp();
+    const denied = await app.request("/admin/ops/privacy/run", { method: "POST" });
+    expect(denied.status).toBe(401);
+    const ok = await app.request("/admin/ops/privacy/run", {
+      method: "POST",
+      headers: { authorization: "Bearer admin" }
+    });
+    expect(ok.status).toBe(200);
+  });
+
+  it("serves rate-limit events to admins only", async () => {
+    const { createApp } = await import("../app");
+    const app = createApp();
+    const denied = await app.request("/admin/rate-limit-events");
+    expect(denied.status).toBe(401);
+    const ok = await app.request("/admin/rate-limit-events", { headers: { authorization: "Bearer admin" } });
+    expect(ok.status).toBe(200);
+  });
+});
+
 describe("trending snapshot job", () => {
   it("requires admin and audit-logs the run", async () => {
     const { createApp } = await import("../app");

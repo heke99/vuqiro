@@ -1,5 +1,11 @@
 import { checkProductionSafety, loadEnv } from "@vuqiro/config";
-import { getPayoutsProvider, getPushProvider, getVideoProvider, type ProviderHealth } from "@vuqiro/services";
+import {
+  getEmailProvider,
+  getPayoutsProvider,
+  getPushProvider,
+  getVideoProvider,
+  type ProviderHealth
+} from "@vuqiro/services";
 import { getServiceDb, isBackendConfigured } from "./supabase";
 
 export interface HealthReport {
@@ -13,6 +19,7 @@ export interface HealthReport {
   payments: ProviderHealth;
   payouts: ProviderHealth;
   push: ProviderHealth;
+  email: ProviderHealth;
   warnings: string[];
 }
 
@@ -54,10 +61,11 @@ export async function getHealthReport(options: { deep?: boolean } = {}): Promise
   const videoProvider = getVideoProvider();
   const payoutsProvider = getPayoutsProvider();
   const pushProvider = getPushProvider();
+  const emailProvider = getEmailProvider();
 
   // Shallow mode reports configuration state without external calls (fast,
   // suitable for load-balancer probes). Deep mode pings each provider.
-  const [database, video, payouts, push] = await Promise.all([
+  const [database, video, payouts, push, email] = await Promise.all([
     checkDatabase(),
     options.deep || videoProvider.name === "mock"
       ? videoProvider.healthCheck()
@@ -71,12 +79,15 @@ export async function getHealthReport(options: { deep?: boolean } = {}): Promise
         }),
     options.deep || pushProvider.name === "mock"
       ? pushProvider.healthCheck()
-      : Promise.resolve<ProviderHealth>({ provider: "push", status: "ok", message: `${pushProvider.name} configured` })
+      : Promise.resolve<ProviderHealth>({ provider: "push", status: "ok", message: `${pushProvider.name} configured` }),
+    options.deep || emailProvider.name === "mock"
+      ? emailProvider.healthCheck()
+      : Promise.resolve<ProviderHealth>({ provider: "email", status: "ok", message: `${emailProvider.name} configured` })
   ]);
   const payments = checkPayments();
 
   const safety = checkProductionSafety(env);
-  const statuses = [database, video, payments, payouts, push];
+  const statuses = [database, video, payments, payouts, push, email];
   const ok =
     safety.fatal.length === 0 && statuses.every((entry) => entry.status === "ok" || entry.status === "mock");
 
@@ -91,6 +102,7 @@ export async function getHealthReport(options: { deep?: boolean } = {}): Promise
     payments,
     payouts,
     push,
+    email,
     warnings: [...safety.fatal, ...safety.warnings]
   };
 }

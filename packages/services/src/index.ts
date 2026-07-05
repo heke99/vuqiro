@@ -12,3 +12,7 @@ export * from "./push/pushProvider";
 export * from "./push/mockPushProvider";
 export * from "./push/expoPushProvider";
 export * from "./push/getPushProvider";
+export * from "./email/emailProvider";
+export * from "./email/mockEmailProvider";
+export * from "./email/resendEmailProvider";
+export * from "./email/getEmailProvider";

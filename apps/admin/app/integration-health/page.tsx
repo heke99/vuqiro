@@ -13,9 +13,10 @@ export default async function IntegrationHealthPage() {
   const { denied } = await guardPage("/integration-health");
   if (denied) return denied;
 
-  const [health, history] = await Promise.all([
+  const [health, history, rateLimitEvents] = await Promise.all([
     adminApiFetch<HealthData>("/admin/integration-health?deep=1"),
-    adminApiFetch<{ history: Row[] }>("/admin/integration-health/history")
+    adminApiFetch<{ history: Row[] }>("/admin/integration-health/history"),
+    adminApiFetch<{ events: Row[] }>("/admin/rate-limit-events")
   ]);
 
   return (
@@ -73,8 +74,26 @@ export default async function IntegrationHealthPage() {
           <AdminApiAction label="Run trending snapshot (daily)" path="/admin/ops/trending/run" body={{ window: "daily" }} />
           <AdminApiAction label="Run trending snapshot (weekly)" path="/admin/ops/trending/run" body={{ window: "weekly" }} />
           <AdminApiAction label="Process notification jobs" path="/admin/notifications/process-jobs" />
+          <AdminApiAction label="Run privacy workers (exports + deletions)" path="/admin/ops/privacy/run" />
         </div>
       </div>
+
+      <div className="section-header">
+        <h2>Rate limit violations</h2>
+      </div>
+      {rateLimitEvents.ok && rateLimitEvents.data.events.length > 0 ? (
+        <AdminTable<Row>
+          columns={[
+            { key: "scope", header: "Scope", render: (event) => <strong>{fieldStr(event, "scope")}</strong> },
+            { key: "key", header: "Limiter key", render: (event) => fieldStr(event, "limiter_key").slice(0, 60) },
+            { key: "limit", header: "Limit", render: (event) => `${fieldStr(event, "limit_max")} / ${Number(fieldStr(event, "window_ms")) / 1000}s` },
+            { key: "when", header: "When", render: (event) => fieldDate(event, "created_at") }
+          ]}
+          rows={rateLimitEvents.data.events}
+        />
+      ) : (
+        <div className="empty-state">No rate-limit violations recorded.</div>
+      )}
 
       <div className="section-header">
         <h2>Check history</h2>

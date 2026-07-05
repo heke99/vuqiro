@@ -84,6 +84,22 @@ export function InboxScreen() {
     }
   };
 
+  /** Deep-link a notification to the content it is about. */
+  const openNotification = (item: AppNotification) => {
+    markRead(item.id);
+    if (item.type === "new_message") {
+      setTab("messages");
+      return;
+    }
+    if (item.relatedVideoId) {
+      router.push(`/video/${item.relatedVideoId}`);
+      return;
+    }
+    if (item.type === "payout_status") {
+      router.push("/studio/payouts");
+    }
+  };
+
   return (
     <Screen>
       <View style={styles.headerRow}>
@@ -121,7 +137,7 @@ export function InboxScreen() {
           </Text>
           {items.length === 0 ? <Text style={styles.emptyText}>No notifications yet.</Text> : null}
           {items.map((item) => (
-            <Pressable key={item.id} onPress={() => markRead(item.id)}>
+            <Pressable key={item.id} onPress={() => openNotification(item)}>
               <Card style={[styles.row, !item.isRead && styles.rowUnread]}>
                 <View style={styles.iconWrap}>
                   <Ionicons

@@ -29,6 +29,10 @@ export interface VuqiroEnv {
   videoWebhookSecret?: string;
   pushProvider: "expo" | "mock";
   expoAccessToken?: string;
+  emailProvider: "resend" | "mock";
+  resendApiKey?: string;
+  /** Verified sender identity, e.g. "Vuqiro <no-reply@vuqiro.app>". */
+  emailFrom: string;
   sentryDsn?: string;
   supportEmail: string;
   publicTermsUrl?: string;
@@ -51,6 +55,7 @@ const envSchema = z.object({
   appVersion: z.string().min(1),
   videoProvider: z.enum(["mux", "mock"]),
   pushProvider: z.enum(["expo", "mock"]),
+  emailProvider: z.enum(["resend", "mock"]),
   apiPort: z.number().int().positive(),
   apiBaseUrl: z.string().min(1),
   supportEmail: z.string().email(),
@@ -71,6 +76,7 @@ export function loadEnv(source: EnvSource = typeof process !== "undefined" ? pro
     : "development";
   const videoProvider = str(source, "VIDEO_PROVIDER") === "mux" ? "mux" : "mock";
   const pushProvider = str(source, "PUSH_PROVIDER") === "expo" ? "expo" : "mock";
+  const emailProvider = str(source, "EMAIL_PROVIDER") === "resend" ? "resend" : "mock";
   const corsOrigins = (str(source, "CORS_ORIGINS") ?? "")
     .split(",")
     .map((origin) => origin.trim())
@@ -94,6 +100,9 @@ export function loadEnv(source: EnvSource = typeof process !== "undefined" ? pro
     videoWebhookSecret: str(source, "VIDEO_WEBHOOK_SECRET"),
     pushProvider,
     expoAccessToken: str(source, "EXPO_ACCESS_TOKEN"),
+    emailProvider,
+    resendApiKey: str(source, "RESEND_API_KEY"),
+    emailFrom: str(source, "EMAIL_FROM") ?? "Vuqiro <no-reply@vuqiro.app>",
     sentryDsn: str(source, "SENTRY_DSN"),
     supportEmail: str(source, "SUPPORT_EMAIL") ?? "support@vuqiro.app",
     publicTermsUrl: str(source, "PUBLIC_TERMS_URL"),
@@ -113,6 +122,7 @@ export function loadEnv(source: EnvSource = typeof process !== "undefined" ? pro
     appVersion: env.appVersion,
     videoProvider: env.videoProvider,
     pushProvider: env.pushProvider,
+    emailProvider: env.emailProvider,
     apiPort: env.apiPort,
     apiBaseUrl: env.apiBaseUrl,
     supportEmail: env.supportEmail,
@@ -188,6 +198,10 @@ export function checkProductionSafety(env: VuqiroEnv): ProductionSafetyReport {
   }
   if (env.pushProvider !== "expo") {
     findings.push("PUSH_PROVIDER is not 'expo' — push notifications would use the mock provider.");
+  }
+  if (env.appEnv === "production" && (env.emailProvider !== "resend" || !env.resendApiKey)) {
+    // Email is important but not launch-blocking: in-app + push still work.
+    warnings.push("Email is not configured (EMAIL_PROVIDER=resend + RESEND_API_KEY) — email notifications will be skipped.");
   }
   if (env.appEnv === "production" && !env.sentryDsn) {
     warnings.push("SENTRY_DSN is missing — production errors will not be reported.");
