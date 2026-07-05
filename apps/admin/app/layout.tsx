@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { headers } from "next/headers";
 import { AdminNav } from "../components/AdminNav";
 import { AdminSignIn } from "../components/AdminSignIn";
 import { SignOutButton } from "../components/SignOutButton";
@@ -14,6 +15,17 @@ export const metadata: Metadata = {
 export const dynamic = "force-dynamic";
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  // The advertiser portal has its own (non-admin) auth and shell.
+  const requestHeaders = await headers();
+  const pathname = requestHeaders.get("x-pathname") ?? "";
+  if (pathname === "/advertiser" || pathname.startsWith("/advertiser/")) {
+    return (
+      <html lang="en">
+        <body>{children}</body>
+      </html>
+    );
+  }
+
   const identity = await getAdminIdentity();
 
   if (!identity) {

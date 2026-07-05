@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { z } from "zod";
 import { mockLedgerEntries, mockPayoutHolds, mockPayouts, mockWalletTransactions } from "@vuqiro/mock-data";
 import { writeAuditLog } from "../lib/audit";
+import { csvResponseHeaders, toCsv } from "../lib/csv";
 import { badRequest, notFound } from "../lib/errors";
 import { getServiceDb, isBackendConfigured } from "../lib/supabase";
 import type { AppEnv } from "../middleware/auth";
@@ -75,11 +76,19 @@ adminFinanceRoutes.get("/purchases", async (c) => {
 });
 
 adminFinanceRoutes.get("/revenue/creator-ledger", async (c) => {
+  const wantsCsv = c.req.query("format") === "csv";
   if (!isBackendConfigured()) {
+    if (wantsCsv) {
+      return c.newResponse(
+        toCsv(mockLedgerEntries as unknown as Record<string, unknown>[]),
+        200,
+        csvResponseHeaders("creator-revenue.csv")
+      );
+    }
     return c.json({ entries: mockLedgerEntries, source: "mock" });
   }
   const db = getServiceDb()!;
-  const limit = Math.min(Math.max(Number(c.req.query("limit") ?? "100"), 1), 500);
+  const limit = wantsCsv ? 5000 : Math.min(Math.max(Number(c.req.query("limit") ?? "100"), 1), 500);
   let query = db
     .from("creator_revenue_ledger")
     .select("*, creators (profiles (handle))")
@@ -89,6 +98,9 @@ adminFinanceRoutes.get("/revenue/creator-ledger", async (c) => {
   if (status) query = query.eq("status", status);
   const { data, error } = await query;
   if (error) throw badRequest(error.message);
+  if (wantsCsv) {
+    return c.newResponse(toCsv((data ?? []) as Record<string, unknown>[]), 200, csvResponseHeaders("creator-revenue.csv"));
+  }
   return c.json({ entries: data ?? [], source: "db" });
 });
 

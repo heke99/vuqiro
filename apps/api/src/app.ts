@@ -15,6 +15,7 @@ import { adminModerationRoutes } from "./routes/adminModeration";
 import { adminOpsRoutes } from "./routes/adminOps";
 import { adminPlatformRoutes } from "./routes/adminPlatform";
 import { adsRoutes } from "./routes/ads";
+import { advertiserRoutes } from "./routes/advertiser";
 import { analyticsRoutes } from "./routes/analytics";
 import { appealRoutes } from "./routes/appeals";
 import { commentRoutes } from "./routes/comments";
@@ -82,6 +83,7 @@ export function createApp() {
   app.route("/feed", feedRoutes);
   app.route("/", feedSessionRoutes); // /feed/session/*, /feed/impression
   app.route("/ads", adsRoutes); // /ads/serve, /ads/impression, /ads/click, /ads/report
+  app.route("/advertiser", advertiserRoutes); // self-serve advertiser portal API
   app.route("/", profileRoutes); // /me, /me/settings, /me/safety-settings, /me/interests, /me/blocks
   app.route("/", privacyRoutes); // /privacy/*, /account/deletion, /copyright-claims, /support-cases
   // Studio routes must precede discovery: /creators/me/* would otherwise be

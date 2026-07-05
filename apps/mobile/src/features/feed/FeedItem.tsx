@@ -242,6 +242,7 @@ export function FeedItem({
         </Pressable>
         <Text style={styles.caption}>{video.caption}</Text>
         <View style={styles.badgeRow}>
+          {video.promoted ? <Badge label="Promoted" tone="warning" /> : null}
           {video.category ? <Badge label={video.category} tone="secondary" /> : null}
           {state === "premium" || video.isPremium ? <Badge label="Premium" /> : null}
           {locked ? <Badge label="Locked" tone="warning" /> : null}

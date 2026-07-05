@@ -20,6 +20,8 @@ export type FeedItemDto = {
   shareCount: number;
   watchCount: number;
   isPremium: boolean;
+  /** True when reach is paid (active boost). Clients must label it. */
+  promoted?: boolean;
   createdAt?: string;
 };
 

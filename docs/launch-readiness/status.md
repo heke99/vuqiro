@@ -14,7 +14,7 @@ underlying audit) and the external dependencies that remain after the code is do
 | B4 | Mobile wiring: discover/search/hashtag feeds, real profiles, saves/likes/follower lists, production-gated mocks | Done |
 | B5 | Watch tracking accuracy + player preloading/posters | Done |
 | B6 | Messaging: API routes + mobile inbox/chat | Done |
-| B7 | Ads: advertiser self-serve, CSV exports, daily pacing, promoted labels | Pending |
+| B7 | Ads: advertiser self-serve, CSV exports, daily pacing, promoted labels | Done |
 | B8 | Notifications: email adapter, deep links, dedupe; data-export/deletion workers; rate-limit logging | Pending |
 | B9 | Analytics: rollup job, admin analytics page, CSV export | Pending |
 | B10 | Security hardening + docs/security.md + permission tests | Pending |
@@ -150,6 +150,29 @@ underlying audit) and the external dependencies that remain after the code is do
   conversation; notification preferences include Direct messages.
 - Tests: `messages.test.ts` (auth on all routes, open/create, validation, rate
   limiting, message reports) — 7 new tests.
+
+## B7 changes
+
+- Advertiser self-serve API (`/advertiser/*`): owners (linked via
+  `advertisers.owner_profile_id`, set by admins) see only their advertisers,
+  accounts, campaigns and reporting; can create draft campaigns (min budget
+  $10, platform-priced CPM/CPC), submit for review, pause/resume. Activation
+  and rejection remain admin-only.
+- Advertiser portal UI at `/advertiser` in the admin app deployment — separate
+  shell + non-admin Supabase auth (new `middleware.ts` exposes the pathname to
+  the root layout and refreshes Supabase sessions on every request, closing the
+  previously documented session-refresh gap).
+- Daily budget pacing: campaigns with `daily_budget_cents` stop serving once
+  today's billing events reach it.
+- Promoted disclosure: for-you feed marks actively boosted videos
+  `promoted: true`; the mobile feed renders a "Promoted" badge.
+- CSV exports: `format=csv` on ad reporting, platform revenue ledger and
+  creator revenue ledger; admin console export buttons proxy through
+  `/api/export/[name]` (allowlisted, session-authenticated).
+- `docs/ads.md` written (entities, lifecycle, serving rules, billing,
+  self-serve, sponsor deals, boosts, superadmin controls).
+- Tests: advertiser scoping/validation/transitions + CSV auth (9 new tests);
+  admin production build verified with the new middleware.
 
 ## Open external dependencies
 

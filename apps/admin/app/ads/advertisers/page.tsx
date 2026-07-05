@@ -32,6 +32,11 @@ export default async function AdvertisersPage() {
             { name: "contactName", label: "Contact person" },
             { name: "websiteUrl", label: "Website URL", placeholder: "https://…" },
             { name: "country", label: "Country (2-letter)", placeholder: "US" },
+            {
+              name: "ownerProfileId",
+              label: "Owner profile id (optional — enables the self-serve advertiser portal)",
+              placeholder: "profile uuid"
+            },
             { name: "notes", label: "Notes", type: "textarea" }
           ]}
         />

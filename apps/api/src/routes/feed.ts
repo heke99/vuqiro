@@ -78,6 +78,22 @@ export function insertAds(videos: FeedItemDto[], ads: ServedAd[], frequency: num
   return entries;
 }
 
+/** Marks organic items whose reach is paid (active boost) so clients can
+ * render the required "Promoted" disclosure label. */
+async function markPromoted(page: FeedItemDto[]): Promise<void> {
+  if (page.length === 0 || !isBackendConfigured()) return;
+  const db = getServiceDb()!;
+  const { data } = await db
+    .from("boost_campaigns")
+    .select("video_id")
+    .in("video_id", page.map((item) => item.id))
+    .eq("status", "active");
+  const boosted = new Set((data ?? []).map((row) => row.video_id));
+  for (const item of page) {
+    if (boosted.has(item.id)) item.promoted = true;
+  }
+}
+
 async function paginatedFeedResponse(options: {
   profileId: string | undefined;
   sessionId: string | undefined;
@@ -88,6 +104,7 @@ async function paginatedFeedResponse(options: {
   feedSettings: FeedSettings;
 }): Promise<{ items: FeedEntry[]; nextCursor: string | null }> {
   const page = options.rows.slice(0, options.pageSize).map(toFeedDto);
+  await markPromoted(page);
   const nextCursor =
     options.rows.length > options.pageSize && page.length > 0 ? encodeCursor(page[page.length - 1]) : null;
 

@@ -31,6 +31,7 @@ type CampaignRow = {
   buying_type: string;
   status: string;
   total_budget_cents: number | null;
+  daily_budget_cents: number | null;
   spent_cents: number;
   cpm_price_cents: number | null;
   cpc_price_cents: number | null;
@@ -92,12 +93,12 @@ export async function selectAds(viewer: AdViewer, placement: string, count: numb
   const { data: campaigns } = await db
     .from("ad_campaigns")
     .select(
-      "id, ad_account_id, advertiser_id, buying_type, status, total_budget_cents, spent_cents, cpm_price_cents, cpc_price_cents, starts_at, ends_at, advertisers (name, status)"
+      "id, ad_account_id, advertiser_id, buying_type, status, total_budget_cents, daily_budget_cents, spent_cents, cpm_price_cents, cpc_price_cents, starts_at, ends_at, advertisers (name, status)"
     )
     .eq("status", "active")
     .limit(200);
 
-  const activeCampaigns = ((campaigns ?? []) as unknown as CampaignRow[]).filter((campaign) => {
+  const budgetedCampaigns = ((campaigns ?? []) as unknown as CampaignRow[]).filter((campaign) => {
     if (campaign.advertisers?.status !== "active") return false;
     if (campaign.starts_at && campaign.starts_at > nowIso) return false;
     if (campaign.ends_at && campaign.ends_at < nowIso) return false;
@@ -109,6 +110,30 @@ export async function selectAds(viewer: AdViewer, placement: string, count: numb
       return false;
     }
     return true;
+  });
+  if (budgetedCampaigns.length === 0) return [];
+
+  // Daily pacing: campaigns with a daily budget stop serving once today's
+  // billing events reach it (spend resumes tomorrow).
+  const dailyCapped = budgetedCampaigns.filter((campaign) => campaign.daily_budget_cents !== null);
+  let dailySpend = new Map<string, number>();
+  if (dailyCapped.length > 0) {
+    const todayStart = `${new Date().toISOString().slice(0, 10)}T00:00:00.000Z`;
+    const { data: todaysBilling } = await db
+      .from("ad_billing_events")
+      .select("campaign_id, amount_cents")
+      .in("campaign_id", dailyCapped.map((campaign) => campaign.id))
+      .gte("created_at", todayStart)
+      .limit(5000);
+    dailySpend = new Map<string, number>();
+    for (const event of todaysBilling ?? []) {
+      if (!event.campaign_id) continue;
+      dailySpend.set(event.campaign_id, (dailySpend.get(event.campaign_id) ?? 0) + event.amount_cents);
+    }
+  }
+  const activeCampaigns = budgetedCampaigns.filter((campaign) => {
+    if (campaign.daily_budget_cents === null) return true;
+    return (dailySpend.get(campaign.id) ?? 0) < campaign.daily_budget_cents;
   });
   if (activeCampaigns.length === 0) return [];
   const campaignIds = activeCampaigns.map((campaign) => campaign.id);

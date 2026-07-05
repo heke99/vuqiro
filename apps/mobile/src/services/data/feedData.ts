@@ -28,6 +28,7 @@ type FeedItemDto = {
   shareCount: number;
   watchCount: number;
   isPremium: boolean;
+  promoted?: boolean;
   createdAt?: string;
 };
 
@@ -56,6 +57,7 @@ export function dtoToEntry(dto: FeedItemDto): { kind: "video"; video: Video; cre
       shareCount: dto.shareCount,
       watchCount: dto.watchCount,
       isPremium: dto.isPremium,
+      promoted: dto.promoted,
       safetyScore: 100,
       createdAt: dto.createdAt
     },

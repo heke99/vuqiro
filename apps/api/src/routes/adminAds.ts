@@ -10,6 +10,7 @@ import {
   mockSponsorshipDeals
 } from "@vuqiro/mock-data";
 import { writeAuditLog } from "../lib/audit";
+import { csvResponseHeaders, toCsv } from "../lib/csv";
 import { badRequest, notFound } from "../lib/errors";
 import { getServiceDb, isBackendConfigured } from "../lib/supabase";
 import type { AppEnv } from "../middleware/auth";
@@ -47,7 +48,9 @@ const advertiserBody = z.object({
   contactName: z.string().trim().max(120).default(""),
   websiteUrl: z.string().url().optional(),
   country: z.string().length(2).optional(),
-  notes: z.string().trim().max(2000).default("")
+  notes: z.string().trim().max(2000).default(""),
+  /** Platform user who self-manages this advertiser (advertiser portal). */
+  ownerProfileId: z.string().max(64).nullable().optional()
 });
 
 adminAdsRoutes.post("/ads/advertisers", manageRoles, async (c) => {
@@ -75,6 +78,7 @@ adminAdsRoutes.post("/ads/advertisers", manageRoles, async (c) => {
       website_url: body.websiteUrl,
       country: body.country,
       notes: body.notes,
+      owner_profile_id: body.ownerProfileId ?? null,
       created_by_admin_id: admin.id
     })
     .select("*")
@@ -108,6 +112,7 @@ adminAdsRoutes.patch("/ads/advertisers/:id", manageRoles, async (c) => {
   if (body.country !== undefined) patch.country = body.country;
   if (body.notes !== undefined) patch.notes = body.notes;
   if (body.status !== undefined) patch.status = body.status;
+  if (body.ownerProfileId !== undefined) patch.owner_profile_id = body.ownerProfileId;
   const { data, error } = await db.from("advertisers").update(patch).eq("id", id).select("*").single();
   if (error) throw badRequest(error.message);
 
@@ -673,20 +678,22 @@ adminAdsRoutes.post("/ads/sponsorships/:id/complete", manageRoles, async (c) => 
 // ---------------------------------------------------------------------------
 
 adminAdsRoutes.get("/ads/reporting", async (c) => {
+  const wantsCsv = c.req.query("format") === "csv";
   if (!isBackendConfigured()) {
-    return c.json({
-      reporting: mockAdCampaigns.map((campaign) => ({
-        campaignId: campaign.id,
-        campaignName: campaign.name,
-        status: campaign.status,
-        buyingType: campaign.buyingType,
-        impressions: campaign.id === "adcamp_001" ? 66540 : 27733,
-        clicks: campaign.id === "adcamp_001" ? 1220 : 2773,
-        conversions: 0,
-        spentCents: campaign.spentCents
-      })),
-      source: "mock"
-    });
+    const reporting = mockAdCampaigns.map((campaign) => ({
+      campaignId: campaign.id,
+      campaignName: campaign.name,
+      status: campaign.status,
+      buyingType: campaign.buyingType,
+      impressions: campaign.id === "adcamp_001" ? 66540 : 27733,
+      clicks: campaign.id === "adcamp_001" ? 1220 : 2773,
+      conversions: 0,
+      spentCents: campaign.spentCents
+    }));
+    if (wantsCsv) {
+      return c.newResponse(toCsv(reporting), 200, csvResponseHeaders("ad-reporting.csv"));
+    }
+    return c.json({ reporting, source: "mock" });
   }
   const db = getServiceDb()!;
   const { data: campaigns, error } = await db
@@ -715,6 +722,9 @@ adminAdsRoutes.get("/ads/reporting", async (c) => {
       };
     })
   );
+  if (wantsCsv) {
+    return c.newResponse(toCsv(reporting), 200, csvResponseHeaders("ad-reporting.csv"));
+  }
   return c.json({ reporting, source: "db" });
 });
 
@@ -744,7 +754,15 @@ adminAdsRoutes.get("/ads/reports", async (c) => {
 
 // Platform revenue ledger (finance/superadmin).
 adminAdsRoutes.get("/revenue/platform-ledger", requireAdmin("platform_superadmin", "admin", "finance"), async (c) => {
+  const wantsCsv = c.req.query("format") === "csv";
   if (!isBackendConfigured()) {
+    if (wantsCsv) {
+      return c.newResponse(
+        toCsv(mockPlatformRevenue as unknown as Record<string, unknown>[]),
+        200,
+        csvResponseHeaders("platform-revenue.csv")
+      );
+    }
     return c.json({ entries: mockPlatformRevenue, source: "mock" });
   }
   const db = getServiceDb()!;
@@ -752,7 +770,14 @@ adminAdsRoutes.get("/revenue/platform-ledger", requireAdmin("platform_superadmin
     .from("platform_revenue_ledger")
     .select("*")
     .order("occurred_at", { ascending: false })
-    .limit(200);
+    .limit(wantsCsv ? 5000 : 200);
   if (error) throw badRequest(error.message);
+  if (wantsCsv) {
+    return c.newResponse(
+      toCsv((data ?? []) as Record<string, unknown>[]),
+      200,
+      csvResponseHeaders("platform-revenue.csv")
+    );
+  }
   return c.json({ entries: data ?? [], source: "db" });
 });
