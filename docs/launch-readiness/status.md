@@ -18,7 +18,7 @@ underlying audit) and the external dependencies that remain after the code is do
 | B8 | Notifications: email adapter, deep links, dedupe; data-export/deletion workers; rate-limit logging | Done |
 | B9 | Analytics: rollup job, admin analytics page, CSV export | Done |
 | B10 | Security hardening + docs/security.md + permission tests | Done |
-| B11 | API/env/deployment/launch docs, CI migration validation, final gate | Pending |
+| B11 | API/env/deployment/launch docs, CI migration validation, final gate | Done |
 
 ## B0 changes
 
@@ -245,6 +245,35 @@ underlying audit) and the external dependencies that remain after the code is do
   content access, webhooks, headers, auditing, privacy, error handling).
 - Tests: `safeHttpUrl` unit + boundary tests (creative/profile URL rejection),
   playback token signing verification (RS256 round-trip) — 8 new tests.
+
+## B11 changes
+
+- Documentation suite written: `docs/api.md` (full endpoint reference with
+  auth/pagination/idempotency conventions), `docs/webhooks.md`, `docs/env.md`,
+  `docs/deployment.md` (topology, provider setup, cron jobs, post-deploy
+  verification), `docs/launch-checklist.md`, `docs/known-limitations.md`,
+  `docs/creator-monetization.md`. README refreshed to match the current state.
+- CI: new `migrations` job runs `scripts/validate-migrations.sh` against a
+  Postgres 16 service (schema + RLS + wallet + ads + hardening assertions);
+  the `check` job now also runs the admin production build.
+
+## Final regression status
+
+All gates green on the final pass:
+
+| Gate | Result |
+|---|---|
+| `pnpm lint` | 0 errors / 0 warnings |
+| `pnpm typecheck` | 0 errors (8 workspaces) |
+| `pnpm test` | 285 tests passing (api 227, config 12, mock-data 15, services 9, admin 12, mobile 10) |
+| `pnpm --filter admin build` | Production build succeeds (40 routes + middleware) |
+| `scripts/validate-migrations.sh` | 15 migrations apply cleanly; 92 tables, RLS on all; wallet/ads/hardening assertions pass |
+
+Tests that require live providers (Mux transcode round-trip, RevenueCat
+sandbox purchases, Stripe Connect transfers, Expo push delivery, Resend
+sends) are external-only by design: the adapters are unit-tested against the
+public API contracts and must be smoke-tested once real credentials exist
+(see `docs/launch-checklist.md`).
 
 ## Open external dependencies
 
