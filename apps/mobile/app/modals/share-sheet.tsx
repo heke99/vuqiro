@@ -1,4 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
+import * as Clipboard from "expo-clipboard";
 import { useLocalSearchParams } from "expo-router";
 import React, { useState } from "react";
 import { Pressable, Share, StyleSheet, Text, View } from "react-native";
@@ -31,8 +32,13 @@ export default function ShareSheet() {
 
   const onTarget = async (target: "copy" | "system") => {
     if (target === "copy") {
-      setCopied(true);
-      recordShare("copy_link");
+      try {
+        await Clipboard.setStringAsync(shareUrl);
+        setCopied(true);
+        recordShare("copy_link");
+      } catch {
+        // clipboard unavailable (e.g. some web contexts) — leave label as-is
+      }
       return;
     }
     recordShare("system_sheet");

@@ -30,21 +30,31 @@ function formatCount(value: number): string {
   return `${value}`;
 }
 
+const DOUBLE_TAP_MS = 260;
+
 export function FeedItem({
   video,
   creator,
   height,
-  isActive
+  isActive,
+  muted = false,
+  onToggleMute
 }: {
   video: Video;
   creator: Creator;
   height: number;
   isActive: boolean;
+  muted?: boolean;
+  onToggleMute?: () => void;
 }) {
   const router = useRouter();
   const social = useSocial();
   const [ageConfirmed, setAgeConfirmed] = useState(false);
+  const [paused, setPaused] = useState(false);
+  const [heartBurst, setHeartBurst] = useState(false);
   const lastProgressBucket = useRef(-1);
+  const lastTapAt = useRef(0);
+  const singleTapTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const liked = social.isLiked(video.id);
   const saved = social.isSaved(video.id);
@@ -54,10 +64,34 @@ export function FeedItem({
   const locked = state === "subscriber_only" || state === "unlock_with_coins" || state === "premium";
   const hidden = state === "removed" || state === "blocked" || state === "under_review";
   const needsAgeGate = state === "age_restricted" && !ageConfirmed;
-  const canPlay = isActive && !locked && !hidden && !needsAgeGate;
+  const canPlay = isActive && !paused && !locked && !hidden && !needsAgeGate;
 
   const toggleLike = () => social.toggleLike(video.id, creator.id);
   const toggleSave = () => social.toggleSave(video.id, creator.id);
+
+  // Single tap pauses/plays; double tap likes (with a heart burst).
+  const onSurfaceTap = () => {
+    const now = Date.now();
+    if (now - lastTapAt.current < DOUBLE_TAP_MS) {
+      lastTapAt.current = 0;
+      if (singleTapTimer.current) {
+        clearTimeout(singleTapTimer.current);
+        singleTapTimer.current = null;
+      }
+      if (!liked) toggleLike();
+      setHeartBurst(true);
+      setTimeout(() => setHeartBurst(false), 700);
+      return;
+    }
+    lastTapAt.current = now;
+    singleTapTimer.current = setTimeout(() => {
+      singleTapTimer.current = null;
+      setPaused((value) => {
+        trackEvent(value ? "video_play" : "video_pause", { videoId: video.id });
+        return !value;
+      });
+    }, DOUBLE_TAP_MS);
+  };
 
   return (
     <View style={[styles.container, { height }]}>
@@ -66,7 +100,7 @@ export function FeedItem({
         thumbnailUrl={video.thumbnailUrl}
         isActive={canPlay}
         loop
-        muted={false}
+        muted={muted}
         onProgress={(seconds) => {
           const bucket = Math.floor(seconds / 5);
           if (bucket !== lastProgressBucket.current) {
@@ -77,6 +111,22 @@ export function FeedItem({
         onComplete={() => trackEvent("video_complete", { videoId: video.id })}
         onError={() => trackEvent("video_pause", { videoId: video.id })}
       />
+
+      {!locked && !hidden && !needsAgeGate ? (
+        <Pressable style={styles.tapSurface} onPress={onSurfaceTap} />
+      ) : null}
+
+      {heartBurst ? (
+        <View style={styles.heartBurst} pointerEvents="none">
+          <Ionicons name="heart" size={96} color={colors.primary} />
+        </View>
+      ) : null}
+
+      {paused && !locked && !hidden && !needsAgeGate ? (
+        <View style={styles.pausedBadge} pointerEvents="none">
+          <Ionicons name="play" size={54} color="rgba(255,255,255,0.85)" />
+        </View>
+      ) : null}
 
       {hidden ? (
         <View style={styles.stateOverlay}>
@@ -146,12 +196,19 @@ export function FeedItem({
           }}
         />
         <VideoActionButton
-          icon="flag"
-          label="Report"
-          onPress={() => {
-            trackEvent("video_report", { videoId: video.id });
-            router.push({ pathname: "/modals/report", params: { targetType: "video", targetId: video.id } });
-          }}
+          icon={muted ? "volume-mute" : "volume-high"}
+          label={muted ? "Muted" : "Sound"}
+          onPress={() => onToggleMute?.()}
+        />
+        <VideoActionButton
+          icon="ellipsis-horizontal"
+          label="More"
+          onPress={() =>
+            router.push({
+              pathname: "/modals/video-options",
+              params: { videoId: video.id, creatorId: creator.id, creatorHandle: creator.handle }
+            })
+          }
         />
       </View>
 
@@ -210,6 +267,27 @@ export function FeedItem({
 
 const styles = StyleSheet.create({
   container: { width: "100%", backgroundColor: colors.background, justifyContent: "flex-end", overflow: "hidden" },
+  tapSurface: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, zIndex: 1 },
+  heartBurst: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 4
+  },
+  pausedBadge: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 2
+  },
   stateOverlay: {
     position: "absolute",
     top: 0,

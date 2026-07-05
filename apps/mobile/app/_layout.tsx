@@ -99,6 +99,7 @@ export default function RootLayout() {
         <Stack.Screen name="modals/share-sheet" options={{ presentation: "modal" }} />
         <Stack.Screen name="modals/locked-content" options={{ presentation: "modal" }} />
         <Stack.Screen name="modals/report-ad" options={{ presentation: "modal" }} />
+        <Stack.Screen name="modals/video-options" options={{ presentation: "modal" }} />
           </Stack>
         </SocialProvider>
       </AuthProvider>

@@ -139,6 +139,35 @@ videoRoutes.post("/:id/save", requireUser, async (c) => {
   return c.json({ saved, source: "db" });
 });
 
+/**
+ * Not-interested: removes the video from the caller's For You feed and acts
+ * as a negative ranking signal. Toggleable (a second call undoes it).
+ */
+videoRoutes.post("/:id/not-interested", requireUser, async (c) => {
+  const id = idParam.parse(c.req.param("id"));
+  const profile = c.get("profile")!;
+  enforceRateLimit(`not-interested:${profile.id}`, 120, 60_000);
+  if (!isBackendConfigured()) return c.json({ notInterested: true, source: "mock" });
+
+  const db = getServiceDb()!;
+  const { data: existing } = await db
+    .from("video_not_interested")
+    .select("id")
+    .eq("profile_id", profile.id)
+    .eq("video_id", id)
+    .maybeSingle();
+  if (existing) {
+    await db.from("video_not_interested").delete().eq("id", existing.id);
+    return c.json({ notInterested: false, source: "db" });
+  }
+  const { error } = await db.from("video_not_interested").insert({ profile_id: profile.id, video_id: id });
+  if (error) throw badRequest(error.message);
+
+  // Negative signal for the ranking engine's recent-events window.
+  await db.from("video_events").insert({ video_id: id, profile_id: profile.id, name: "video_skip", value: 1 });
+  return c.json({ notInterested: true, source: "db" }, 201);
+});
+
 const shareBody = z.object({
   channel: z.enum(["copy_link", "system_sheet", "direct_message", "external"]).default("system_sheet")
 });
@@ -163,22 +192,73 @@ videoRoutes.post("/:id/share", async (c) => {
   return c.json({ shared: true, shareUrl: `https://vuqiro.app/v/${id}`, shareCount: video.share_count + 1, source: "db" }, 201);
 });
 
+const COMMENT_SELECT =
+  "id, video_id, author_id, parent_comment_id, text, like_count, reply_count, created_at, profiles!comments_author_id_fkey (handle, display_name)";
+
+function encodeCommentCursor(row: { created_at: string; id: string }): string {
+  return Buffer.from(`${row.created_at}|${row.id}`).toString("base64url");
+}
+
+function decodeCommentCursor(cursor: string | undefined): { createdAt: string; id: string } | null {
+  if (!cursor) return null;
+  try {
+    const [createdAt, id] = Buffer.from(cursor, "base64url").toString("utf8").split("|");
+    if (!createdAt || !id) return null;
+    return { createdAt, id };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Cursor-paginated comments. Pages walk top-level comments newest-first;
+ * each page includes the replies for its top-level comments so threads
+ * render complete.
+ */
 videoRoutes.get("/:id/comments", async (c) => {
   const id = idParam.parse(c.req.param("id"));
+  const limit = Math.min(Math.max(Number(c.req.query("limit") ?? "20"), 1), 50);
+  const cursor = decodeCommentCursor(c.req.query("cursor") ?? undefined);
 
   if (!isBackendConfigured()) {
-    return c.json({ comments: mockComments.filter((comment) => comment.videoId === id), source: "mock" });
+    return c.json({
+      comments: mockComments.filter((comment) => comment.videoId === id),
+      nextCursor: null,
+      source: "mock"
+    });
   }
 
   const db = getServiceDb()!;
-  const { data, error } = await db
+  let query = db
     .from("comments")
-    .select("id, video_id, author_id, parent_comment_id, text, like_count, reply_count, created_at, profiles!comments_author_id_fkey (handle, display_name)")
+    .select(COMMENT_SELECT)
     .eq("video_id", id)
+    .is("parent_comment_id", null)
     .in("moderation_status", ["visible", "limited"])
     .order("created_at", { ascending: false })
-    .limit(100);
+    .limit(limit + 1);
+  if (cursor) query = query.lt("created_at", cursor.createdAt);
+  const { data, error } = await query;
   if (error) throw badRequest(error.message);
+
+  const topLevel = (data ?? []).slice(0, limit);
+  const nextCursor =
+    (data ?? []).length > limit && topLevel.length > 0
+      ? encodeCommentCursor(topLevel[topLevel.length - 1] as { created_at: string; id: string })
+      : null;
+
+  let replies: typeof topLevel = [];
+  if (topLevel.length > 0) {
+    const { data: replyRows } = await db
+      .from("comments")
+      .select(COMMENT_SELECT)
+      .eq("video_id", id)
+      .in("parent_comment_id", topLevel.map((row) => row.id))
+      .in("moderation_status", ["visible", "limited"])
+      .order("created_at", { ascending: true })
+      .limit(200);
+    replies = replyRows ?? [];
+  }
 
   const profile = c.get("profile");
   let blocked = new Set<string>();
@@ -188,7 +268,8 @@ videoRoutes.get("/:id/comments", async (c) => {
   }
 
   return c.json({
-    comments: (data ?? []).filter((row) => !blocked.has(row.author_id)),
+    comments: [...topLevel, ...replies].filter((row) => !blocked.has(row.author_id)),
+    nextCursor,
     source: "db"
   });
 });

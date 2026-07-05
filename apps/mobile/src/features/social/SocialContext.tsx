@@ -20,14 +20,21 @@ type SocialState = {
   blockedUserIds: ReadonlySet<string>;
   likedVideoIds: ReadonlySet<string>;
   savedVideoIds: ReadonlySet<string>;
+  mutedUserIds: ReadonlySet<string>;
+  notInterestedVideoIds: ReadonlySet<string>;
   isFollowing: (creatorId: string) => boolean;
   isBlocked: (userId: string) => boolean;
   isLiked: (videoId: string) => boolean;
   isSaved: (videoId: string) => boolean;
+  isMuted: (userId: string) => boolean;
+  isNotInterested: (videoId: string) => boolean;
   toggleFollow: (creatorId: string) => void;
   toggleBlock: (userId: string) => void;
   toggleLike: (videoId: string, creatorId?: string) => void;
   toggleSave: (videoId: string, creatorId?: string) => void;
+  /** Mutes by creator id (resolved to a profile server-side). */
+  toggleMute: (creatorId: string) => void;
+  markNotInterested: (videoId: string) => void;
 };
 
 const SocialContext = createContext<SocialState | null>(null);
@@ -47,6 +54,8 @@ export function SocialProvider({ children }: { children: React.ReactNode }) {
   const [blockedUserIds, setBlocked] = useState<ReadonlySet<string>>(new Set());
   const [likedVideoIds, setLiked] = useState<ReadonlySet<string>>(new Set());
   const [savedVideoIds, setSaved] = useState<ReadonlySet<string>>(new Set());
+  const [mutedUserIds, setMuted] = useState<ReadonlySet<string>>(new Set());
+  const [notInterestedVideoIds, setNotInterested] = useState<ReadonlySet<string>>(new Set());
 
   const toggleFollow = useCallback((creatorId: string) => {
     setFollowed((current) => {
@@ -80,22 +89,54 @@ export function SocialProvider({ children }: { children: React.ReactNode }) {
     syncToApi(`/videos/${videoId}/save`);
   }, []);
 
+  const toggleMute = useCallback((creatorId: string) => {
+    setMuted((current) => toggleInSet(current, creatorId));
+    syncToApi("/mutes", { creatorId });
+  }, []);
+
+  const markNotInterested = useCallback((videoId: string) => {
+    setNotInterested((current) => {
+      if (!current.has(videoId)) trackEvent("video_skip", { videoId });
+      return toggleInSet(current, videoId);
+    });
+    syncToApi(`/videos/${videoId}/not-interested`);
+  }, []);
+
   const value = useMemo<SocialState>(
     () => ({
       followedCreatorIds,
       blockedUserIds,
       likedVideoIds,
       savedVideoIds,
+      mutedUserIds,
+      notInterestedVideoIds,
       isFollowing: (creatorId) => followedCreatorIds.has(creatorId),
       isBlocked: (userId) => blockedUserIds.has(userId),
       isLiked: (videoId) => likedVideoIds.has(videoId),
       isSaved: (videoId) => savedVideoIds.has(videoId),
+      isMuted: (userId) => mutedUserIds.has(userId),
+      isNotInterested: (videoId) => notInterestedVideoIds.has(videoId),
       toggleFollow,
       toggleBlock,
       toggleLike,
-      toggleSave
+      toggleSave,
+      toggleMute,
+      markNotInterested
     }),
-    [followedCreatorIds, blockedUserIds, likedVideoIds, savedVideoIds, toggleFollow, toggleBlock, toggleLike, toggleSave]
+    [
+      followedCreatorIds,
+      blockedUserIds,
+      likedVideoIds,
+      savedVideoIds,
+      mutedUserIds,
+      notInterestedVideoIds,
+      toggleFollow,
+      toggleBlock,
+      toggleLike,
+      toggleSave,
+      toggleMute,
+      markNotInterested
+    ]
   );
 
   return <SocialContext.Provider value={value}>{children}</SocialContext.Provider>;

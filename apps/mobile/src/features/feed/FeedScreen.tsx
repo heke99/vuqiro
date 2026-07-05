@@ -21,6 +21,7 @@ export function FeedScreen() {
   const social = useSocial();
   const [activeIndex, setActiveIndex] = useState(0);
   const [feedTab, setFeedTab] = useState<FeedTab>("for_you");
+  const [muted, setMuted] = useState(false);
   const liveFeed = useFeed(feedTab);
 
   useEffect(() => {
@@ -34,8 +35,14 @@ export function FeedScreen() {
   const data: FeedEntry[] = useMemo(() => {
     // Live entries when the API is reachable, mock entries otherwise.
     const source = liveFeed.isLive || liveFeed.entries.length > 0 ? liveFeed.entries : mockFeedEntries();
-    // Blocked creators are always hidden, in every feed. Ads pass through.
-    const visible = source.filter((entry) => entry.kind === "ad" || !social.isBlocked(entry.video.creatorId));
+    // Blocked/muted creators and not-interested videos are hidden. Ads pass through.
+    const visible = source.filter(
+      (entry) =>
+        entry.kind === "ad" ||
+        (!social.isBlocked(entry.video.creatorId) &&
+          !social.isMuted(entry.video.creatorId) &&
+          !social.isNotInterested(entry.video.id))
+    );
     if (feedTab === "following" && !liveFeed.isLive) {
       const followed = visible.filter(
         (entry) => entry.kind === "video" && social.isFollowing(entry.video.creatorId)
@@ -69,9 +76,18 @@ export function FeedScreen() {
       if (item.kind === "ad") {
         return <SponsoredAdCard ad={item.ad} height={height} isActive={index === activeIndex} />;
       }
-      return <FeedItem video={item.video} creator={item.creator} height={height} isActive={index === activeIndex} />;
+      return (
+        <FeedItem
+          video={item.video}
+          creator={item.creator}
+          height={height}
+          isActive={index === activeIndex}
+          muted={muted}
+          onToggleMute={() => setMuted((value) => !value)}
+        />
+      );
     },
-    [height, activeIndex]
+    [height, activeIndex, muted]
   );
 
   const isEmpty = data.length === 0 && !liveFeed.loading;

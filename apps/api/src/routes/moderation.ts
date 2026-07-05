@@ -136,3 +136,54 @@ moderationRoutes.post("/blocks", requireUser, async (c) => {
   if (error) throw badRequest(error.message);
   return c.json({ blocked: true, source: "db" }, 201);
 });
+
+const muteBody = z
+  .object({
+    mutedProfileId: z.string().min(1).max(64).optional(),
+    creatorId: z.string().min(1).max(64).optional()
+  })
+  .refine((body) => body.mutedProfileId || body.creatorId, {
+    message: "mutedProfileId or creatorId is required"
+  });
+
+/**
+ * Toggle a mute. Softer than a block: the muted user's content disappears
+ * from the muter's feeds, but profiles stay visible and interactions remain
+ * possible. Accepts a profile id directly or a creator id (resolved
+ * server-side, since feed items only carry creator ids).
+ */
+moderationRoutes.post("/mutes", requireUser, async (c) => {
+  const profile = c.get("profile")!;
+  enforceRateLimit(`mute:${profile.id}`, 60, 3_600_000);
+  const body = muteBody.parse(await c.req.json());
+
+  if (!isBackendConfigured()) {
+    return c.json({ muted: true, source: "mock" }, 201);
+  }
+
+  const db = getServiceDb()!;
+  let mutedProfileId = body.mutedProfileId;
+  if (!mutedProfileId && body.creatorId) {
+    const { data: creator } = await db.from("creators").select("profile_id").eq("id", body.creatorId).maybeSingle();
+    if (!creator) throw badRequest("Creator not found");
+    mutedProfileId = creator.profile_id;
+  }
+  if (!mutedProfileId) throw badRequest("Nothing to mute");
+  if (mutedProfileId === profile.id) throw badRequest("Cannot mute yourself");
+
+  const { data: existing } = await db
+    .from("mutes")
+    .select("id")
+    .eq("muter_id", profile.id)
+    .eq("muted_profile_id", mutedProfileId)
+    .maybeSingle();
+
+  if (existing) {
+    await db.from("mutes").delete().eq("id", existing.id);
+    return c.json({ muted: false, source: "db" });
+  }
+
+  const { error } = await db.from("mutes").insert({ muter_id: profile.id, muted_profile_id: mutedProfileId });
+  if (error) throw badRequest(error.message);
+  return c.json({ muted: true, source: "db" }, 201);
+});

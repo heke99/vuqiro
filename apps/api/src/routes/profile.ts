@@ -333,6 +333,38 @@ profileRoutes.get("/me/blocks", requireUser, async (c) => {
 });
 
 // ---------------------------------------------------------------------------
+// Muted users
+// ---------------------------------------------------------------------------
+
+profileRoutes.get("/me/mutes", requireUser, async (c) => {
+  const profile = c.get("profile")!;
+  if (!isBackendConfigured()) {
+    return c.json({ mutes: [], source: "mock" });
+  }
+  const db = getServiceDb()!;
+  const { data, error } = await db
+    .from("mutes")
+    .select("id, muted_profile_id, created_at, muted:profiles!mutes_muted_profile_id_fkey (handle, display_name, avatar_url)")
+    .eq("muter_id", profile.id)
+    .order("created_at", { ascending: false });
+  if (error) throw badRequest(error.message);
+  return c.json({
+    mutes: (data ?? []).map((row) => {
+      const muted = row.muted as unknown as { handle: string; display_name: string; avatar_url: string | null } | null;
+      return {
+        id: row.id,
+        profileId: row.muted_profile_id,
+        handle: muted?.handle ?? "unknown",
+        displayName: muted?.display_name ?? "Unknown",
+        avatarUrl: muted?.avatar_url ?? undefined,
+        createdAt: row.created_at
+      };
+    }),
+    source: "db"
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Consent events (onboarding writes these; settings changes above also do)
 // ---------------------------------------------------------------------------
 

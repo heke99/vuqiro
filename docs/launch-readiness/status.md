@@ -10,7 +10,7 @@ underlying audit) and the external dependencies that remain after the code is do
 | B0 | Audit docs, admin readiness page fix, public feature-flags endpoint | Done |
 | B1 | Schema: mutes, not-interested, featured, rate_limit_events, advertiser linkage, search indexes | Done |
 | B2 | Ranking: configurable weights, real signals, explain endpoint, trending snapshots | Done |
-| B3 | Engagement: not-interested/mute APIs, comment pagination + replies, double-tap like, mute toggle, clipboard | Pending |
+| B3 | Engagement: not-interested/mute APIs, comment pagination + replies, double-tap like, mute toggle, clipboard | Done |
 | B4 | Mobile wiring: discover/search/hashtag feeds, real profiles, saves/likes/follower lists, production-gated mocks | Pending |
 | B5 | Watch tracking accuracy + player preloading/posters | Pending |
 | B6 | Messaging: API routes + mobile inbox/chat | Pending |
@@ -75,6 +75,23 @@ underlying audit) and the external dependencies that remain after the code is do
   prefers fresh snapshots and falls back to live aggregation.
 - Tests: weight multiplier behaviour, featured eligibility, inspector RBAC,
   trending job validation (10 new tests).
+
+## B3 changes
+
+- API: `POST /videos/:id/not-interested` (toggle, writes a negative `video_skip`
+  signal), `POST /mutes` (toggle; accepts a profile id or creator id and resolves
+  server-side), `GET /me/mutes`, all rate-limited. `GET /videos/:id/comments` is
+  now cursor-paginated over top-level comments (replies for the page ride along)
+  and returns `nextCursor`.
+- Mobile: double-tap-to-like with heart burst + single-tap pause/play on the feed
+  player; sound on/off toggle in the action rail (feed-wide state); new "More"
+  options modal (not interested / mute creator / report); feed hides muted
+  creators and not-interested videos locally; comment sheet gained reply posting
+  (with reply banner + optimistic insert/rollback) and "Load more" pagination;
+  share sheet "Copy link" now actually writes to the clipboard (expo-clipboard);
+  video detail Like/Save buttons wired to the social context and API.
+- Tests: `engagement.test.ts` (auth, mute validation, rate limiting, pagination
+  contract) — 9 new tests.
 
 ## Open external dependencies
 

@@ -8,12 +8,16 @@ import { Badge } from "../../components/Badge";
 import { Button } from "../../components/Button";
 import { Card } from "../../components/Card";
 import { Screen } from "../../components/Screen";
+import { useSocial } from "../social/SocialContext";
 import { colors, spacing } from "../../design/theme";
 
 export function VideoDetailScreen({ videoId }: { videoId: string }) {
   const router = useRouter();
+  const social = useSocial();
   const video = mockVideos.find((item) => item.id === videoId) ?? mockVideos[0];
   const creator = mockCreators.find((item) => item.id === video.creatorId) ?? mockCreators[0];
+  const liked = social.isLiked(video.id);
+  const saved = social.isSaved(video.id);
   const comments = mockComments.filter(
     (comment) => comment.videoId === video.id && !comment.parentCommentId
   );
@@ -75,8 +79,18 @@ export function VideoDetailScreen({ videoId }: { videoId: string }) {
         <Badge label={`${video.shareCount.toLocaleString()} shares`} />
       </View>
       <View style={styles.actionsRow}>
-        <Button label="Like" variant="ghost" style={{ flex: 1 }} />
-        <Button label="Save" variant="ghost" style={{ flex: 1 }} />
+        <Button
+          label={liked ? "Liked" : "Like"}
+          variant={liked ? "primary" : "ghost"}
+          style={{ flex: 1 }}
+          onPress={() => social.toggleLike(video.id, creator.id)}
+        />
+        <Button
+          label={saved ? "Saved" : "Save"}
+          variant={saved ? "primary" : "ghost"}
+          style={{ flex: 1 }}
+          onPress={() => social.toggleSave(video.id, creator.id)}
+        />
         <Button
           label="Share"
           variant="ghost"
