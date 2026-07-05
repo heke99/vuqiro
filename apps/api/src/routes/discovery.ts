@@ -10,6 +10,7 @@ import {
 } from "../lib/feedQuery";
 import { badRequest } from "../lib/errors";
 import { getServiceDb, isBackendConfigured } from "../lib/supabase";
+import { latestTrendSnapshots } from "../lib/trending";
 import type { AppEnv } from "../middleware/auth";
 import { attachUser } from "../middleware/auth";
 
@@ -182,22 +183,71 @@ discoveryRoutes.get("/discover/trending", async (c) => {
   const profile = c.get("profile");
   const blocked = await blockedCreatorIds(profile?.id);
   const creators = (await dbCreatorSummaries()).filter((creator) => !blocked.has(creator.id));
+  const db = getServiceDb()!;
 
-  const { data: videoRows, error } = await visibleVideosQuery()
-    .order("watch_count", { ascending: false })
-    .limit(50);
-  if (error) throw badRequest(error.message);
-  const visible = applyFeedRules((videoRows ?? []) as unknown as VideoRow[], blocked);
+  // Prefer precomputed trend snapshots (windowed velocity, spam-resistant);
+  // fall back to live aggregation when no fresh snapshot exists yet.
+  const snapshots = await latestTrendSnapshots("daily");
 
-  const hashtagCounts = new Map<string, number>();
-  for (const row of visible) {
-    for (const tag of row.hashtags) {
-      hashtagCounts.set(tag, (hashtagCounts.get(tag) ?? 0) + Number(row.watch_count));
+  let topVideos: VideoRow[] = [];
+  let trendingHashtags: string[] = [];
+  let trendingCreatorIds: string[] = [];
+
+  if (snapshots && snapshots.videoIds.length > 0) {
+    const { data: videoRows } = await visibleVideosQuery().in("id", snapshots.videoIds).limit(50);
+    const rankOrder = new Map(snapshots.videoIds.map((id, index) => [id, index]));
+    topVideos = applyFeedRules((videoRows ?? []) as unknown as VideoRow[], blocked).sort(
+      (a, b) => (rankOrder.get(a.id) ?? 99) - (rankOrder.get(b.id) ?? 99)
+    );
+    if (snapshots.hashtagIds.length > 0) {
+      const { data: tagRows } = await db
+        .from("hashtags")
+        .select("id, tag")
+        .in("id", snapshots.hashtagIds)
+        .eq("is_blocked", false);
+      const tagOrder = new Map(snapshots.hashtagIds.map((id, index) => [id, index]));
+      trendingHashtags = (tagRows ?? [])
+        .sort((a, b) => (tagOrder.get(a.id) ?? 99) - (tagOrder.get(b.id) ?? 99))
+        .map((row) => row.tag);
     }
+    trendingCreatorIds = snapshots.creatorIds;
   }
 
+  if (topVideos.length === 0) {
+    const { data: videoRows, error } = await visibleVideosQuery()
+      .order("watch_count", { ascending: false })
+      .limit(50);
+    if (error) throw badRequest(error.message);
+    topVideos = applyFeedRules((videoRows ?? []) as unknown as VideoRow[], blocked);
+  }
+
+  if (trendingHashtags.length === 0) {
+    const hashtagCounts = new Map<string, number>();
+    for (const row of topVideos) {
+      for (const tag of row.hashtags) {
+        hashtagCounts.set(tag, (hashtagCounts.get(tag) ?? 0) + Number(row.watch_count));
+      }
+    }
+    trendingHashtags = [...hashtagCounts.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 10)
+      .map(([tag]) => tag);
+  }
+
+  const snapshotCreatorOrder = new Map(trendingCreatorIds.map((id, index) => [id, index]));
+  const trendingCreators =
+    trendingCreatorIds.length > 0
+      ? [...creators]
+          .filter((creator) => snapshotCreatorOrder.has(creator.id))
+          .sort((a, b) => (snapshotCreatorOrder.get(a.id) ?? 99) - (snapshotCreatorOrder.get(b.id) ?? 99))
+          .slice(0, 8)
+      : [...creators].sort((a, b) => b.followerCount - a.followerCount).slice(0, 8);
+
   return c.json({
-    trendingCreators: [...creators].sort((a, b) => b.followerCount - a.followerCount).slice(0, 8),
+    trendingCreators:
+      trendingCreators.length > 0
+        ? trendingCreators
+        : [...creators].sort((a, b) => b.followerCount - a.followerCount).slice(0, 8),
     premiumCreators: creators
       .filter((creator) => creator.monetizationEnabled)
       .sort((a, b) => b.subscriberCount - a.subscriberCount)
@@ -205,11 +255,9 @@ discoveryRoutes.get("/discover/trending", async (c) => {
     newCreators: [...creators]
       .sort((a, b) => (b.createdAt ?? "").localeCompare(a.createdAt ?? ""))
       .slice(0, 8),
-    trendingHashtags: [...hashtagCounts.entries()]
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 10)
-      .map(([tag]) => tag),
-    topVideos: visible.slice(0, 10).map(toFeedDto),
+    trendingHashtags: trendingHashtags.slice(0, 10),
+    topVideos: topVideos.slice(0, 10).map(toFeedDto),
+    trendsCapturedAt: snapshots?.capturedAt,
     source: "db"
   });
 });

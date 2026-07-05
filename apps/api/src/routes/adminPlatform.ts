@@ -3,6 +3,9 @@ import { z } from "zod";
 import { mockComments, mockCreators, mockUsers, mockVideos } from "@vuqiro/mock-data";
 import { writeAuditLog } from "../lib/audit";
 import { badRequest, notFound } from "../lib/errors";
+import { explainVideoRanking } from "../lib/feedRanking";
+import { DEFAULT_FEED_WEIGHTS } from "../lib/platformSettings";
+import { scoreVideo, type RankingInput } from "../lib/ranking";
 import { getServiceDb, isBackendConfigured } from "../lib/supabase";
 import type { AppEnv } from "../middleware/auth";
 import { requireAdmin } from "../middleware/auth";
@@ -220,7 +223,7 @@ adminPlatformRoutes.get("/videos", async (c) => {
   const { limit, offset } = pageQuery(c);
   let query = db
     .from("videos")
-    .select("id, creator_id, caption, status, moderation_status, visibility, ad_eligible, like_count, comment_count, watch_count, report_count, created_at, creators (profiles (handle))", {
+    .select("id, creator_id, caption, status, moderation_status, visibility, ad_eligible, is_featured, like_count, comment_count, watch_count, report_count, created_at, creators (profiles (handle))", {
       count: "exact"
     })
     .order("created_at", { ascending: false })
@@ -255,13 +258,23 @@ adminPlatformRoutes.get("/videos/:id", async (c) => {
   return c.json({ video, asset: asset.data, reports: reports.data ?? [], processingJobs: jobs.data ?? [], source: "db" });
 });
 
-const videoActions: Record<string, { patch: Record<string, unknown>; action: string }> = {
+type VideoPatch = Record<string, unknown> | ((admin: { id: string }) => Record<string, unknown>);
+
+const videoActions: Record<string, { patch: VideoPatch; action: string }> = {
   hide: { patch: { moderation_status: "limited" }, action: "video_hide" },
   remove: { patch: { moderation_status: "removed", status: "removed" }, action: "video_remove" },
   restore: { patch: { moderation_status: "visible", status: "ready" }, action: "video_restore" },
   "age-restrict": { patch: { moderation_status: "age_restricted" }, action: "video_age_restrict" },
   "ad-eligible": { patch: { ad_eligible: true }, action: "video_ad_eligible" },
-  "ad-ineligible": { patch: { ad_eligible: false }, action: "video_ad_ineligible" }
+  "ad-ineligible": { patch: { ad_eligible: false }, action: "video_ad_ineligible" },
+  feature: {
+    patch: (admin) => ({ is_featured: true, featured_at: new Date().toISOString(), featured_by: admin.id }),
+    action: "video_feature"
+  },
+  unfeature: {
+    patch: { is_featured: false, featured_at: null, featured_by: null },
+    action: "video_unfeature"
+  }
 };
 
 adminPlatformRoutes.post("/videos/:id/:action", enforcementRoles, async (c) => {
@@ -270,6 +283,7 @@ adminPlatformRoutes.post("/videos/:id/:action", enforcementRoles, async (c) => {
   const actionName = z.string().parse(c.req.param("action"));
   const action = videoActions[actionName];
   if (!action) throw notFound("Unknown video action");
+  const patch = typeof action.patch === "function" ? action.patch(admin) : action.patch;
 
   if (!isBackendConfigured()) {
     await writeAuditLog(admin, {
@@ -278,13 +292,13 @@ adminPlatformRoutes.post("/videos/:id/:action", enforcementRoles, async (c) => {
       targetId: id,
       summary: `${actionName} (mock mode)`
     });
-    return c.json({ videoId: id, ...action.patch, source: "mock" });
+    return c.json({ videoId: id, ...patch, source: "mock" });
   }
 
   const db = getServiceDb()!;
   const { data: video } = await db.from("videos").select("id, caption").eq("id", id).maybeSingle();
   if (!video) throw notFound("Video not found");
-  const { error } = await db.from("videos").update(action.patch).eq("id", id);
+  const { error } = await db.from("videos").update(patch).eq("id", id);
   if (error) throw badRequest(error.message);
 
   await writeAuditLog(admin, {
@@ -293,7 +307,40 @@ adminPlatformRoutes.post("/videos/:id/:action", enforcementRoles, async (c) => {
     targetId: id,
     summary: `Video ${actionName}: "${(video.caption as string).slice(0, 60)}"`
   });
-  return c.json({ videoId: id, ...action.patch, source: "db" });
+  return c.json({ videoId: id, ...patch, source: "db" });
+});
+
+// ---------------------------------------------------------------------------
+// Ranking inspector: full factor breakdown for one video (why it ranks)
+// ---------------------------------------------------------------------------
+
+adminPlatformRoutes.get("/videos/:id/ranking", async (c) => {
+  const id = z.string().min(1).parse(c.req.param("id"));
+
+  if (!isBackendConfigured()) {
+    const video = mockVideos.find((candidate) => candidate.id === id) ?? mockVideos[0];
+    const input: RankingInput = {
+      videoId: video.id,
+      creatorId: video.creatorId,
+      createdAt: video.createdAt ?? new Date().toISOString(),
+      watchCount: video.watchCount,
+      likeCount: video.likeCount,
+      commentCount: video.commentCount,
+      saveCount: 0,
+      shareCount: video.shareCount,
+      safetyScore: 100,
+      moderationStatus: video.moderationStatus ?? "visible",
+      reportCount: 0,
+      creatorFollowerCount: 0,
+      creatorVerified: false,
+      creatorVideoCount: 1
+    };
+    return c.json({ videoId: video.id, result: scoreVideo(input), input, weights: DEFAULT_FEED_WEIGHTS, source: "mock" });
+  }
+
+  const explanation = await explainVideoRanking(id);
+  if (!explanation) throw notFound("Video not found");
+  return c.json({ ...explanation, source: "db" });
 });
 
 // ---------------------------------------------------------------------------

@@ -8,6 +8,7 @@ import { getHealthReport } from "../lib/health";
 import { PLATFORM_SETTING_DEFAULTS, resetPlatformSettingsCache } from "../lib/platformSettings";
 import { processNotificationJobs } from "../lib/pushDelivery";
 import { getServiceDb, isBackendConfigured } from "../lib/supabase";
+import { computeTrendSnapshots } from "../lib/trending";
 import type { AppEnv } from "../middleware/auth";
 import { requireAdmin } from "../middleware/auth";
 
@@ -462,4 +463,34 @@ adminOpsRoutes.post("/notifications/broadcast", requireAdmin("platform_superadmi
 adminOpsRoutes.post("/notifications/process-jobs", requireAdmin("platform_superadmin", "admin"), async (c) => {
   const result = await processNotificationJobs();
   return c.json({ ...result, source: isBackendConfigured() ? "db" : "mock" });
+});
+
+// ---------------------------------------------------------------------------
+// Trending snapshots (also invocable by an external cron)
+// ---------------------------------------------------------------------------
+
+const trendingBody = z.object({ window: z.enum(["daily", "weekly"]).default("daily") });
+
+adminOpsRoutes.post("/ops/trending/run", requireAdmin("platform_superadmin", "admin"), async (c) => {
+  const admin = c.get("admin")!;
+  const body = trendingBody.parse(await c.req.json().catch(() => ({})));
+
+  if (!isBackendConfigured()) {
+    await writeAuditLog(admin, {
+      action: "trending_snapshot_run",
+      targetType: "platform_setting",
+      targetId: `trending_${body.window}`,
+      summary: `Trending snapshot run (${body.window}, mock mode)`
+    });
+    return c.json({ captured: 0, window: body.window, source: "mock" });
+  }
+
+  const result = await computeTrendSnapshots(body.window);
+  await writeAuditLog(admin, {
+    action: "trending_snapshot_run",
+    targetType: "platform_setting",
+    targetId: `trending_${body.window}`,
+    summary: `Trending snapshot run (${body.window}): ${result?.captured ?? 0} rows`
+  });
+  return c.json({ ...result, window: body.window, source: "db" });
 });

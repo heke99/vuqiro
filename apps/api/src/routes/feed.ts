@@ -5,7 +5,8 @@ import type { ServedAd } from "@vuqiro/types";
 import { selectAds, type AdViewer } from "../lib/adServing";
 import {
   applyFeedRules,
-  blockedCreatorIds,
+  hiddenCreatorIds,
+  notInterestedVideoIds,
   toFeedDto,
   visibleVideosQuery,
   type FeedItemDto,
@@ -152,14 +153,19 @@ feedRoutes.get("/for-you", async (c) => {
   }
 
   const profile = c.get("profile");
-  const blocked = await blockedCreatorIds(profile?.id);
+  const [hidden, notInterested] = await Promise.all([
+    hiddenCreatorIds(profile?.id),
+    notInterestedVideoIds(profile?.id)
+  ]);
 
   let query = visibleVideosQuery().order("created_at", { ascending: false }).limit(100);
   if (cursor) query = query.lt("created_at", cursor.createdAt);
   const { data, error } = await query;
   if (error) throw badRequest(error.message);
 
-  const visible = applyFeedRules(data as unknown as VideoRow[], blocked);
+  const visible = applyFeedRules(data as unknown as VideoRow[], hidden).filter(
+    (row) => !notInterested.has(row.id)
+  );
   const ranked = await rankFeedRows(visible, profile?.id);
   const { items, nextCursor } = await paginatedFeedResponse({
     profileId: profile?.id,
@@ -184,7 +190,7 @@ feedRoutes.get("/trending", async (c) => {
     return c.json({ items, nextCursor: null, source: "mock" });
   }
   const profile = c.get("profile");
-  const blocked = await blockedCreatorIds(profile?.id);
+  const blocked = await hiddenCreatorIds(profile?.id);
   const { data, error } = await visibleVideosQuery().order("watch_count", { ascending: false }).limit(50);
   if (error) throw badRequest(error.message);
   const items = applyFeedRules(data as unknown as VideoRow[], blocked)
@@ -206,7 +212,7 @@ feedRoutes.get("/sound/:id", async (c) => {
   if (videoIds.length === 0) return c.json({ items: [], soundId, source: "db" });
 
   const profile = c.get("profile");
-  const blocked = await blockedCreatorIds(profile?.id);
+  const blocked = await hiddenCreatorIds(profile?.id);
   const { data } = await visibleVideosQuery().in("id", videoIds).order("watch_count", { ascending: false }).limit(50);
   const items = applyFeedRules((data ?? []) as unknown as VideoRow[], blocked).map((row) => ({
     kind: "video" as const,
@@ -228,7 +234,7 @@ feedRoutes.get("/following", async (c) => {
   const creatorIds = (follows ?? []).map((row) => row.creator_id);
   if (creatorIds.length === 0) return c.json({ items: [], source: "db" });
 
-  const blocked = await blockedCreatorIds(profile.id);
+  const blocked = await hiddenCreatorIds(profile.id);
   const { data, error } = await visibleVideosQuery()
     .in("creator_id", creatorIds)
     .order("created_at", { ascending: false })
@@ -253,7 +259,7 @@ feedRoutes.get("/hashtag/:tag", async (c) => {
   }
 
   const profile = c.get("profile");
-  const blocked = await blockedCreatorIds(profile?.id);
+  const blocked = await hiddenCreatorIds(profile?.id);
   const { data, error } = await visibleVideosQuery()
     .contains("hashtags", [tag])
     .order("watch_count", { ascending: false })
@@ -271,7 +277,7 @@ feedRoutes.get("/premium", async (c) => {
   }
 
   const profile = c.get("profile");
-  const blocked = await blockedCreatorIds(profile?.id);
+  const blocked = await hiddenCreatorIds(profile?.id);
   const { data, error } = await visibleVideosQuery()
     .in("visibility", ["subscribers_only", "premium_tier_only", "unlock_with_coins"])
     .order("created_at", { ascending: false })

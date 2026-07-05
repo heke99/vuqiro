@@ -9,7 +9,7 @@ underlying audit) and the external dependencies that remain after the code is do
 |---|---|---|
 | B0 | Audit docs, admin readiness page fix, public feature-flags endpoint | Done |
 | B1 | Schema: mutes, not-interested, featured, rate_limit_events, advertiser linkage, search indexes | Done |
-| B2 | Ranking: configurable weights, real signals, explain endpoint, trending snapshots | Pending |
+| B2 | Ranking: configurable weights, real signals, explain endpoint, trending snapshots | Done |
 | B3 | Engagement: not-interested/mute APIs, comment pagination + replies, double-tap like, mute toggle, clipboard | Pending |
 | B4 | Mobile wiring: discover/search/hashtag feeds, real profiles, saves/likes/follower lists, production-gated mocks | Pending |
 | B5 | Watch tracking accuracy + player preloading/posters | Pending |
@@ -49,6 +49,32 @@ underlying audit) and the external dependencies that remain after the code is do
 - Seed: one featured video, one mute, one not-interested row.
 - Canonical schema documentation added at `docs/database.md`; the stale
   `docs/architecture/database-schema.md` now points to it.
+
+## B2 changes
+
+- `platform_settings.feed_weights` is now actually applied: `scoreVideo`/`rankVideos`
+  accept sanitized weight multipliers (0–10, invalid values ignored) and
+  `rankFeedRows` loads them per request (30s cache). Added a `featured` weight and
+  ranking factor — featured videos get extra distribution, but only while
+  moderation-visible.
+- Real ranking signals: `creatorFollowerCount` now comes from
+  `profiles.follower_count`; category/hashtag interest matching now uses the
+  viewer's `user_interests`.
+- Feed candidate filtering: For You excludes not-interested videos; all feed
+  surfaces exclude muted creators (blocked stays global; muted users remain
+  searchable).
+- New admin ranking inspector: `GET /admin/videos/:id/ranking` returns the full
+  factor breakdown + input snapshot + active weights; new admin page
+  `/videos/[id]` renders it with enforcement + feature/unfeature actions.
+- Feature/suppress: `POST /admin/videos/:id/feature|unfeature` (audit-logged,
+  records `featured_by`/`featured_at`).
+- Trending snapshots: `computeTrendSnapshots()` scores recent watch events +
+  likes/shares in a daily/weekly window (visible, public, ready content only) and
+  writes `trend_snapshots`; `POST /admin/ops/trending/run` triggers it (cron-able,
+  audit-logged, button on the Integration health page). `/discover/trending` now
+  prefers fresh snapshots and falls back to live aggregation.
+- Tests: weight multiplier behaviour, featured eligibility, inspector RBAC,
+  trending job validation (10 new tests).
 
 ## Open external dependencies
 
