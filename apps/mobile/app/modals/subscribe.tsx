@@ -1,11 +1,11 @@
 import { useLocalSearchParams } from "expo-router";
 import React, { useEffect, useState } from "react";
 import { StyleSheet, Text } from "react-native";
-import { mockCreators } from "@vuqiro/mock-data";
 import type { PaymentsOfferingPackage } from "@vuqiro/services/payments";
 import { ModalShell } from "../../src/components/ModalShell";
 import { PackageCard } from "../../src/components/PackageCard";
 import { trackEvent } from "../../src/features/video/videoEvents";
+import { fetchCreatorProfile } from "../../src/services/data/creatorData";
 import { getPaymentsProvider, isUsingRealPayments } from "../../src/services/payments/getPaymentsProvider";
 import { RevenueCatPaymentsProvider } from "../../src/services/payments/revenueCatPaymentsProvider";
 import { colors, spacing } from "../../src/design/theme";
@@ -18,7 +18,7 @@ const tierBenefits: Record<string, string[]> = {
 
 export default function SubscribeModal() {
   const { creatorId } = useLocalSearchParams<{ creatorId?: string }>();
-  const creator = mockCreators.find((item) => item.id === creatorId);
+  const [creatorName, setCreatorName] = useState<string | null>(null);
   const [packages, setPackages] = useState<PaymentsOfferingPackage[]>([]);
   const [status, setStatus] = useState<string | null>(null);
 
@@ -31,6 +31,11 @@ export default function SubscribeModal() {
       const memberships = offerings.find((offering) => offering.identifier === "creator_memberships");
       if (!cancelled && memberships) setPackages(memberships.packages);
     })();
+    if (creatorId) {
+      void fetchCreatorProfile(creatorId).then((result) => {
+        if (!cancelled && result) setCreatorName(result.creator.displayName);
+      });
+    }
     return () => {
       cancelled = true;
     };
@@ -60,8 +65,8 @@ export default function SubscribeModal() {
     <ModalShell
       title="Choose your support level"
       subtitle={
-        creator
-          ? `Support ${creator.displayName} directly and unlock more from their world.`
+        creatorName
+          ? `Support ${creatorName} directly and unlock more from their world.`
           : "Support creators directly and unlock more from their world."
       }
     >

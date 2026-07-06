@@ -31,4 +31,10 @@ export async function securityHeaders(c: Context, next: Next) {
   c.header("x-frame-options", "DENY");
   c.header("referrer-policy", "no-referrer");
   c.header("cache-control", "no-store");
+  c.header("cross-origin-opener-policy", "same-origin");
+  c.header("cross-origin-resource-policy", "cross-origin");
+  c.header("permissions-policy", "camera=(), microphone=(), geolocation=()");
+  if (process.env.EXPO_PUBLIC_APP_ENV === "production" || process.env.EXPO_PUBLIC_APP_ENV === "staging") {
+    c.header("strict-transport-security", "max-age=63072000; includeSubDomains");
+  }
 }

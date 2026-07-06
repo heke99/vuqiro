@@ -9,7 +9,10 @@ import { canAccessPath } from "../lib/rbac";
 const groups: { label: string; items: [string, string][] }[] = [
   {
     label: "Overview",
-    items: [["/dashboard", "Dashboard"]]
+    items: [
+      ["/dashboard", "Dashboard"],
+      ["/analytics", "Analytics"]
+    ]
   },
   {
     label: "Community",

@@ -22,6 +22,7 @@ export type FeedWeightSettings = {
   interest: number;
   boost: number;
   safety: number;
+  featured: number;
 };
 
 export type UploadLimitSettings = {
@@ -42,7 +43,8 @@ export const DEFAULT_FEED_WEIGHTS: FeedWeightSettings = {
   follow: 1,
   interest: 1,
   boost: 1,
-  safety: 1
+  safety: 1,
+  featured: 1
 };
 export const DEFAULT_UPLOAD_LIMITS: UploadLimitSettings = { maxDurationSeconds: 180, maxUploadsPerHour: 10 };
 export const DEFAULT_MODERATION_THRESHOLDS: ModerationThresholdSettings = {

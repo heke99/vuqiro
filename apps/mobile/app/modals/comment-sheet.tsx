@@ -10,6 +10,7 @@ import { useAuth } from "../../src/features/auth/AuthContext";
 import { useSocial } from "../../src/features/social/SocialContext";
 import { trackEvent } from "../../src/features/video/videoEvents";
 import { apiFetch, isApiConfigured } from "../../src/services/api/client";
+import { isDemoContentAllowed } from "../../src/services/data/demoMode";
 import { colors, radii, spacing } from "../../src/design/theme";
 
 type CommentRowDto = {
@@ -45,12 +46,14 @@ function CommentRow({
   comment,
   replies,
   ownProfileId,
-  onDelete
+  onDelete,
+  onReply
 }: {
   comment: Comment;
   replies: Comment[];
   ownProfileId?: string;
   onDelete: (commentId: string) => void;
+  onReply: (comment: Comment) => void;
 }) {
   const router = useRouter();
   const social = useSocial();
@@ -82,7 +85,9 @@ function CommentRow({
                 {liked ? "Liked" : "Like"} · {comment.likeCount + (liked ? 1 : 0)}
               </Text>
             </Pressable>
-            <Text style={styles.action}>Reply{comment.replyCount > 0 ? ` (${comment.replyCount})` : ""}</Text>
+            <Pressable onPress={() => onReply(comment)}>
+              <Text style={styles.action}>Reply{comment.replyCount > 0 ? ` (${comment.replyCount})` : ""}</Text>
+            </Pressable>
             {isOwn ? (
               <Pressable onPress={() => onDelete(comment.id)}>
                 <Text style={[styles.action, { color: colors.danger }]}>Delete</Text>
@@ -132,32 +137,47 @@ export default function CommentSheet() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isLive, setIsLive] = useState(false);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [replyTo, setReplyTo] = useState<Comment | null>(null);
 
-  const load = useCallback(async () => {
-    const id = videoId ?? "video_001";
-    if (!isApiConfigured()) {
-      setComments(mockComments.filter((comment) => comment.videoId === id));
-      setIsLive(false);
-      return;
-    }
-    setLoading(true);
-    setError(null);
-    try {
-      const response = await apiFetch<{ comments: (CommentRowDto | Comment)[]; source: string }>(
-        `/videos/${id}/comments`
-      );
-      const mapped = response.comments.map((row) =>
-        "video_id" in row ? dtoToComment(row as CommentRowDto) : (row as Comment)
-      );
-      setComments(mapped);
-      setIsLive(response.source === "db");
-    } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : "Could not load comments");
-      setComments(mockComments.filter((comment) => comment.videoId === id));
-    } finally {
-      setLoading(false);
-    }
-  }, [videoId]);
+  const load = useCallback(
+    async (cursor?: string) => {
+      const id = videoId ?? "video_001";
+      if (!isApiConfigured()) {
+        setComments(isDemoContentAllowed() ? mockComments.filter((comment) => comment.videoId === id) : []);
+        setIsLive(false);
+        return;
+      }
+      setLoading(true);
+      setError(null);
+      try {
+        const query = cursor ? `?cursor=${encodeURIComponent(cursor)}` : "";
+        const response = await apiFetch<{
+          comments: (CommentRowDto | Comment)[];
+          nextCursor?: string | null;
+          source: string;
+        }>(`/videos/${id}/comments${query}`);
+        const mapped = response.comments.map((row) =>
+          "video_id" in row ? dtoToComment(row as CommentRowDto) : (row as Comment)
+        );
+        setComments((current) => {
+          if (!cursor) return mapped;
+          const seen = new Set(current.map((comment) => comment.id));
+          return [...current, ...mapped.filter((comment) => !seen.has(comment.id))];
+        });
+        setNextCursor(response.nextCursor ?? null);
+        setIsLive(response.source === "db");
+      } catch (loadError) {
+        setError(loadError instanceof Error ? loadError.message : "Could not load comments");
+        if (!cursor && isDemoContentAllowed()) {
+          setComments(mockComments.filter((comment) => comment.videoId === id));
+        }
+      } finally {
+        setLoading(false);
+      }
+    },
+    [videoId]
+  );
 
   useEffect(() => {
     void load();
@@ -179,6 +199,7 @@ export default function CommentSheet() {
     const text = draft.trim();
     if (!text) return;
     const id = videoId ?? "video_001";
+    const parent = replyTo;
     trackEvent("comment_submit", { videoId: id });
     // Optimistic insert; reconciled on reload.
     const optimistic: Comment = {
@@ -189,16 +210,22 @@ export default function CommentSheet() {
       authorDisplayName: "You",
       isCreator: false,
       isSubscriber: false,
+      parentCommentId: parent?.id,
       text,
       likeCount: 0,
       replyCount: 0,
       createdAt: new Date().toISOString()
     };
-    setComments((current) => [optimistic, ...current]);
+    setComments((current) => (parent ? [...current, optimistic] : [optimistic, ...current]));
     setDraft("");
+    setReplyTo(null);
     if (isApiConfigured()) {
       try {
-        await apiFetch(`/videos/${id}/comments`, { method: "POST", body: JSON.stringify({ text }) });
+        if (parent && !parent.id.startsWith("local_")) {
+          await apiFetch(`/comments/${parent.id}/replies`, { method: "POST", body: JSON.stringify({ text }) });
+        } else {
+          await apiFetch(`/videos/${id}/comments`, { method: "POST", body: JSON.stringify({ text }) });
+        }
         void load();
       } catch (submitError) {
         setComments((current) => current.filter((comment) => comment.id !== optimistic.id));
@@ -216,12 +243,22 @@ export default function CommentSheet() {
 
   return (
     <ModalShell title="Comments" subtitle={`${topLevel.length} comments${isLive ? "" : " · demo data"}`}>
+      {replyTo ? (
+        <View style={styles.replyBanner}>
+          <Text style={styles.replyBannerText} numberOfLines={1}>
+            Replying to {replyTo.authorDisplayName}: “{replyTo.text.slice(0, 60)}”
+          </Text>
+          <Pressable onPress={() => setReplyTo(null)}>
+            <Text style={styles.replyBannerCancel}>Cancel</Text>
+          </Pressable>
+        </View>
+      ) : null}
       <View style={styles.composer}>
         <TextInput
           style={styles.input}
           value={draft}
           onChangeText={setDraft}
-          placeholder="Add a comment…"
+          placeholder={replyTo ? "Add a reply…" : "Add a comment…"}
           placeholderTextColor={colors.textMuted}
         />
         <Pressable style={[styles.send, !draft.trim() && styles.sendDisabled]} onPress={submit}>
@@ -240,8 +277,18 @@ export default function CommentSheet() {
           replies={repliesByParent.get(comment.id) ?? []}
           ownProfileId={auth.profile?.id}
           onDelete={deleteComment}
+          onReply={setReplyTo}
         />
       ))}
+      {nextCursor ? (
+        <Pressable style={styles.loadMore} onPress={() => load(nextCursor)} disabled={loading}>
+          {loading ? (
+            <ActivityIndicator color={colors.primary} />
+          ) : (
+            <Text style={styles.loadMoreText}>Load more comments</Text>
+          )}
+        </Pressable>
+      ) : null}
     </ModalShell>
   );
 }
@@ -276,5 +323,19 @@ const styles = StyleSheet.create({
   action: { color: colors.textMuted, fontSize: 12, fontWeight: "800" },
   actionActive: { color: colors.secondary },
   errorText: { color: colors.danger, fontSize: 13, marginBottom: spacing.md },
-  emptyText: { color: colors.textMuted, textAlign: "center", marginTop: spacing.xl }
+  emptyText: { color: colors.textMuted, textAlign: "center", marginTop: spacing.xl },
+  replyBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.md,
+    backgroundColor: colors.surfaceElevated,
+    borderRadius: radii.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    marginBottom: spacing.sm
+  },
+  replyBannerText: { flex: 1, color: colors.textSoft, fontSize: 12 },
+  replyBannerCancel: { color: colors.secondary, fontWeight: "900", fontSize: 12 },
+  loadMore: { alignItems: "center", paddingVertical: spacing.lg },
+  loadMoreText: { color: colors.secondary, fontWeight: "900" }
 });

@@ -27,5 +27,6 @@ export const mockNotificationPreferences: NotificationPreferences = {
   payouts: true,
   moderation: true,
   system: true,
+  messages: true,
   pushEnabled: false
 };

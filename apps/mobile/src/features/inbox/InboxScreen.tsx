@@ -1,9 +1,13 @@
 import { Ionicons } from "@expo/vector-icons";
-import React, { useEffect, useState } from "react";
+import { useRouter } from "expo-router";
+import React, { useCallback, useEffect, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { mockNotifications } from "@vuqiro/mock-data";
 import type { AppNotification, NotificationType } from "@vuqiro/types";
 import { apiFetch, isApiConfigured } from "../../services/api/client";
+import { isDemoMode } from "../../services/data/demoMode";
+import { fetchConversations, type ConversationSummary } from "../../services/data/messagesData";
+import { Avatar } from "../../components/Avatar";
 import { Card } from "../../components/Card";
 import { Screen } from "../../components/Screen";
 import { colors, spacing } from "../../design/theme";
@@ -20,12 +24,29 @@ const iconForType: Record<NotificationType, keyof typeof Ionicons.glyphMap> = {
   video_unlocked: "lock-open",
   payout_status: "card",
   moderation_warning: "warning",
-  system_notice: "information-circle"
+  system_notice: "information-circle",
+  new_message: "mail"
 };
 
 export function InboxScreen() {
-  const [items, setItems] = useState<AppNotification[]>(mockNotifications);
+  const router = useRouter();
+  const [tab, setTab] = useState<"notifications" | "messages">("notifications");
+  const [items, setItems] = useState<AppNotification[]>(isDemoMode() ? mockNotifications : []);
+  const [conversations, setConversations] = useState<ConversationSummary[] | null>(null);
   const unread = items.filter((item) => !item.isRead).length;
+  const unreadMessages = (conversations ?? []).filter((conversation) => conversation.unread).length;
+
+  const loadConversations = useCallback(async () => {
+    try {
+      setConversations(await fetchConversations());
+    } catch {
+      setConversations([]);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (tab === "messages") void loadConversations();
+  }, [tab, loadConversations]);
 
   useEffect(() => {
     if (!isApiConfigured()) return;
@@ -63,36 +84,117 @@ export function InboxScreen() {
     }
   };
 
+  /** Deep-link a notification to the content it is about. */
+  const openNotification = (item: AppNotification) => {
+    markRead(item.id);
+    if (item.type === "new_message") {
+      setTab("messages");
+      return;
+    }
+    if (item.relatedVideoId) {
+      router.push(`/video/${item.relatedVideoId}`);
+      return;
+    }
+    if (item.type === "payout_status") {
+      router.push("/studio/payouts");
+    }
+  };
+
   return (
     <Screen>
       <View style={styles.headerRow}>
         <View>
           <Text style={styles.kicker}>Inbox</Text>
-          <Text style={styles.title}>Notifications</Text>
+          <Text style={styles.title}>{tab === "notifications" ? "Notifications" : "Messages"}</Text>
         </View>
-        {unread > 0 ? (
+        {tab === "notifications" && unread > 0 ? (
           <Pressable onPress={markAllRead}>
             <Text style={styles.markRead}>Mark all read</Text>
           </Pressable>
         ) : null}
       </View>
-      <Text style={styles.subtitle}>
-        {unread > 0 ? `${unread} unread notification${unread === 1 ? "" : "s"}` : "You're all caught up"}
-      </Text>
-      {items.map((item) => (
-        <Pressable key={item.id} onPress={() => markRead(item.id)}>
-          <Card style={[styles.row, !item.isRead && styles.rowUnread]}>
-            <View style={styles.iconWrap}>
-              <Ionicons name={iconForType[item.type]} size={20} color={item.isRead ? colors.textMuted : colors.secondary} />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.rowTitle}>{item.title}</Text>
-              <Text style={styles.rowBody}>{item.body}</Text>
-            </View>
-            {!item.isRead ? <View style={styles.dot} /> : null}
-          </Card>
+
+      <View style={styles.tabs}>
+        <Pressable
+          style={[styles.tab, tab === "notifications" && styles.tabActive]}
+          onPress={() => setTab("notifications")}
+        >
+          <Text style={[styles.tabText, tab === "notifications" && styles.tabTextActive]}>
+            Notifications{unread > 0 ? ` (${unread})` : ""}
+          </Text>
         </Pressable>
-      ))}
+        <Pressable style={[styles.tab, tab === "messages" && styles.tabActive]} onPress={() => setTab("messages")}>
+          <Text style={[styles.tabText, tab === "messages" && styles.tabTextActive]}>
+            Messages{unreadMessages > 0 ? ` (${unreadMessages})` : ""}
+          </Text>
+        </Pressable>
+      </View>
+
+      {tab === "notifications" ? (
+        <>
+          <Text style={styles.subtitle}>
+            {unread > 0 ? `${unread} unread notification${unread === 1 ? "" : "s"}` : "You're all caught up"}
+          </Text>
+          {items.length === 0 ? <Text style={styles.emptyText}>No notifications yet.</Text> : null}
+          {items.map((item) => (
+            <Pressable key={item.id} onPress={() => openNotification(item)}>
+              <Card style={[styles.row, !item.isRead && styles.rowUnread]}>
+                <View style={styles.iconWrap}>
+                  <Ionicons
+                    name={iconForType[item.type]}
+                    size={20}
+                    color={item.isRead ? colors.textMuted : colors.secondary}
+                  />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.rowTitle}>{item.title}</Text>
+                  <Text style={styles.rowBody}>{item.body}</Text>
+                </View>
+                {!item.isRead ? <View style={styles.dot} /> : null}
+              </Card>
+            </Pressable>
+          ))}
+        </>
+      ) : (
+        <>
+          {!isApiConfigured() ? (
+            <Text style={styles.emptyText}>Direct messages activate when the app is connected to the Vuqiro API.</Text>
+          ) : conversations === null ? (
+            <Text style={styles.emptyText}>Loading conversations…</Text>
+          ) : conversations.length === 0 ? (
+            <Text style={styles.emptyText}>
+              No conversations yet. Open a creator profile and tap Message to start one.
+            </Text>
+          ) : (
+            conversations.map((conversation) => (
+              <Pressable
+                key={conversation.id}
+                onPress={() =>
+                  router.push({
+                    pathname: "/messages/[id]",
+                    params: {
+                      id: conversation.id,
+                      name: conversation.other?.displayName ?? "Conversation",
+                      otherProfileId: conversation.other?.profileId ?? ""
+                    }
+                  })
+                }
+              >
+                <Card style={[styles.row, conversation.unread && styles.rowUnread]}>
+                  <Avatar name={conversation.other?.displayName ?? "?"} size={40} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.rowTitle}>{conversation.other?.displayName ?? "Conversation"}</Text>
+                    <Text style={styles.rowBody} numberOfLines={1}>
+                      {conversation.lastMessage?.body ?? "Start the conversation"}
+                    </Text>
+                  </View>
+                  {conversation.unread ? <View style={styles.dot} /> : null}
+                </Card>
+              </Pressable>
+            ))
+          )}
+        </>
+      )}
     </Screen>
   );
 }
@@ -115,5 +217,18 @@ const styles = StyleSheet.create({
   },
   rowTitle: { color: colors.text, fontWeight: "900", marginBottom: 2 },
   rowBody: { color: colors.textSoft, fontSize: 13, lineHeight: 18 },
-  dot: { width: 10, height: 10, borderRadius: 5, backgroundColor: colors.secondary }
+  dot: { width: 10, height: 10, borderRadius: 5, backgroundColor: colors.secondary },
+  tabs: { flexDirection: "row", gap: spacing.sm, marginTop: spacing.md, marginBottom: spacing.md },
+  tab: {
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface
+  },
+  tabActive: { borderColor: colors.secondary, backgroundColor: colors.surfaceElevated },
+  tabText: { color: colors.textMuted, fontWeight: "800", fontSize: 13 },
+  tabTextActive: { color: colors.text },
+  emptyText: { color: colors.textMuted, textAlign: "center", marginTop: spacing.xl, lineHeight: 20 }
 });

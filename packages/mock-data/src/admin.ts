@@ -1,4 +1,4 @@
-import type { AdminDashboardMetrics, AdminUser, FeatureFlag, FraudSignal, ReadinessItem, User } from "@vuqiro/types";
+import type { AdminDashboardMetrics, AdminUser, FeatureFlag, FraudSignal, User } from "@vuqiro/types";
 
 export const mockAdminIdentity: AdminUser = {
   id: "admin_001",
@@ -80,19 +80,3 @@ export const mockFraudSignals: FraudSignal[] = [
   { id: "fraud_005", type: "chargeback_risk", severity: "high", targetType: "user", targetId: "user_233", summary: "2 chargebacks in 30 days.", status: "actioned", createdAt: "2026-06-20T16:00:00Z" }
 ];
 
-export const mockReadinessItems: ReadinessItem[] = [
-  { id: "ready_001", category: "app_store", label: "App icon and splash uploaded", status: "in_progress" },
-  { id: "ready_002", category: "app_store", label: "Screenshots for 6.7\" and 5.5\"", status: "todo" },
-  { id: "ready_003", category: "app_store", label: "Privacy nutrition labels", status: "todo" },
-  { id: "ready_004", category: "app_store", label: "IAP products approved", status: "blocked_external", note: "Requires Apple Developer account" },
-  { id: "ready_005", category: "google_play", label: "Data safety form", status: "todo" },
-  { id: "ready_006", category: "google_play", label: "UGC policy declaration", status: "todo" },
-  { id: "ready_007", category: "payments", label: "RevenueCat offerings configured", status: "blocked_external", note: "Requires RevenueCat project keys" },
-  { id: "ready_008", category: "payments", label: "Sandbox purchase test passed", status: "blocked_external" },
-  { id: "ready_009", category: "moderation", label: "Report flows live", status: "in_progress" },
-  { id: "ready_010", category: "moderation", label: "Moderation queue staffed", status: "todo" },
-  { id: "ready_011", category: "legal", label: "Terms/Privacy published at public URLs", status: "todo" },
-  { id: "ready_012", category: "legal", label: "Account deletion flow verified", status: "in_progress" },
-  { id: "ready_013", category: "backend", label: "Migrations applied with RLS", status: "in_progress" },
-  { id: "ready_014", category: "backend", label: "Webhook signature verification", status: "todo" }
-];

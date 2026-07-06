@@ -20,6 +20,11 @@ export default async function AdsReportingPage() {
         title="Delivery reporting & billing"
         copy="Impressions, clicks, conversions and billing events per campaign. CPM/CPC charges reconcile automatically into the platform revenue ledger."
       />
+      <div className="row" style={{ marginBottom: 14 }}>
+        <a className="button small" href="/api/export/ads-reporting" download>
+          Export campaign report (CSV)
+        </a>
+      </div>
       {!reporting.ok ? <ErrorBanner message={reporting.error} /> : null}
       {reporting.ok && reporting.data.reporting.length > 0 ? (
         <AdminTable<Row>

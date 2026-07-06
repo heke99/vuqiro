@@ -118,6 +118,179 @@ describe("ranking rules", () => {
   });
 });
 
+describe("tunable weight multipliers", () => {
+  it("defaults to the same score as no multipliers", () => {
+    const base = scoreVideo(makeInput(), NOW);
+    const explicit = scoreVideo(makeInput(), NOW, { recency: 1, engagement: 1, featured: 1 });
+    expect(explicit.score).toBe(base.score);
+  });
+
+  it("amplifies a factor when its multiplier increases", () => {
+    const base = scoreVideo(makeInput({ createdAt: "2026-07-02T11:00:00Z" }), NOW);
+    const amplified = scoreVideo(makeInput({ createdAt: "2026-07-02T11:00:00Z" }), NOW, { recency: 2 });
+    const baseFreshness = base.factors.find((factor) => factor.name === "freshness")!;
+    const ampFreshness = amplified.factors.find((factor) => factor.name === "freshness")!;
+    expect(ampFreshness.contribution).toBeCloseTo(baseFreshness.contribution * 2, 3);
+    expect(amplified.score).toBeGreaterThan(base.score);
+  });
+
+  it("disables a factor when its multiplier is 0", () => {
+    const disabled = scoreVideo(makeInput({ boostScore: 1 }), NOW, { boost: 0 });
+    const boostFactor = disabled.factors.find((factor) => factor.name === "boost")!;
+    expect(boostFactor.contribution).toBe(0);
+  });
+
+  it("ignores invalid multipliers (negative, NaN)", () => {
+    const base = scoreVideo(makeInput(), NOW);
+    const invalid = scoreVideo(makeInput(), NOW, { engagement: -5, safety: Number.NaN });
+    expect(invalid.score).toBe(base.score);
+  });
+});
+
+describe("featured curation", () => {
+  it("boosts featured videos", () => {
+    const organic = scoreVideo(makeInput(), NOW);
+    const featured = scoreVideo(makeInput({ isFeatured: true }), NOW);
+    expect(featured.score).toBeGreaterThan(organic.score);
+    const factor = featured.factors.find((candidate) => candidate.name === "featured")!;
+    expect(factor.contribution).toBeGreaterThan(0);
+  });
+
+  it("does not apply the featured boost to non-visible content", () => {
+    const featured = scoreVideo(makeInput({ isFeatured: true, moderationStatus: "limited" }), NOW);
+    const factor = featured.factors.find((candidate) => candidate.name === "featured")!;
+    expect(factor.contribution).toBe(0);
+  });
+});
+
+describe("ranking inspector endpoint", () => {
+  it("requires admin", async () => {
+    const { createApp } = await import("../app");
+    const app = createApp();
+    const res = await app.request("/admin/videos/video_001/ranking");
+    expect(res.status).toBe(401);
+  });
+
+  it("returns a factor breakdown with weights", async () => {
+    const { createApp } = await import("../app");
+    const app = createApp();
+    const res = await app.request("/admin/videos/video_001/ranking", {
+      headers: { authorization: "Bearer admin" }
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      result: { score: number; factors: { name: string }[] };
+      weights: Record<string, number>;
+    };
+    expect(body.result.factors.length).toBeGreaterThan(5);
+    expect(body.weights.featured).toBe(1);
+  });
+});
+
+describe("ops workers", () => {
+  it("requires admin for the privacy workers run", async () => {
+    const { createApp } = await import("../app");
+    const app = createApp();
+    const denied = await app.request("/admin/ops/privacy/run", { method: "POST" });
+    expect(denied.status).toBe(401);
+    const ok = await app.request("/admin/ops/privacy/run", {
+      method: "POST",
+      headers: { authorization: "Bearer admin" }
+    });
+    expect(ok.status).toBe(200);
+  });
+
+  it("serves rate-limit events to admins only", async () => {
+    const { createApp } = await import("../app");
+    const app = createApp();
+    const denied = await app.request("/admin/rate-limit-events");
+    expect(denied.status).toBe(401);
+    const ok = await app.request("/admin/rate-limit-events", { headers: { authorization: "Bearer admin" } });
+    expect(ok.status).toBe(200);
+  });
+
+  it("requires admin for the analytics rollup run", async () => {
+    const { createApp } = await import("../app");
+    const app = createApp();
+    const denied = await app.request("/admin/ops/analytics/run", { method: "POST" });
+    expect(denied.status).toBe(401);
+    const ok = await app.request("/admin/ops/analytics/run", {
+      method: "POST",
+      headers: { authorization: "Bearer admin", "content-type": "application/json" },
+      body: JSON.stringify({ date: "2026-07-04" })
+    });
+    expect(ok.status).toBe(200);
+  });
+
+  it("rejects malformed rollup dates", async () => {
+    const { createApp } = await import("../app");
+    const app = createApp();
+    const res = await app.request("/admin/ops/analytics/run", {
+      method: "POST",
+      headers: { authorization: "Bearer admin", "content-type": "application/json" },
+      body: JSON.stringify({ date: "yesterday" })
+    });
+    expect(res.status).toBe(400);
+  });
+});
+
+describe("platform analytics", () => {
+  it("returns totals and a daily series", async () => {
+    const { createApp } = await import("../app");
+    const app = createApp();
+    const res = await app.request("/admin/analytics", { headers: { authorization: "Bearer admin" } });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { totals: { views: number }; series: unknown[] };
+    expect(body.totals.views).toBeGreaterThan(0);
+    expect(body.series.length).toBeGreaterThan(0);
+  });
+
+  it("rejects malformed date filters", async () => {
+    const { createApp } = await import("../app");
+    const app = createApp();
+    const res = await app.request("/admin/analytics?from=notadate", { headers: { authorization: "Bearer admin" } });
+    expect(res.status).toBe(400);
+  });
+
+  it("exports the series as csv", async () => {
+    const { createApp } = await import("../app");
+    const app = createApp();
+    const res = await app.request("/admin/analytics?format=csv", { headers: { authorization: "Bearer admin" } });
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-type")).toContain("text/csv");
+    const text = await res.text();
+    expect(text.split("\r\n")[0]).toContain("date");
+  });
+});
+
+describe("trending snapshot job", () => {
+  it("requires admin and audit-logs the run", async () => {
+    const { createApp } = await import("../app");
+    const app = createApp();
+    const denied = await app.request("/admin/ops/trending/run", { method: "POST" });
+    expect(denied.status).toBe(401);
+    const ok = await app.request("/admin/ops/trending/run", {
+      method: "POST",
+      headers: { authorization: "Bearer admin", "content-type": "application/json" },
+      body: JSON.stringify({ window: "daily" })
+    });
+    expect(ok.status).toBe(200);
+    const body = (await ok.json()) as { window: string };
+    expect(body.window).toBe("daily");
+  });
+
+  it("rejects invalid windows", async () => {
+    const { createApp } = await import("../app");
+    const app = createApp();
+    const res = await app.request("/admin/ops/trending/run", {
+      method: "POST",
+      headers: { authorization: "Bearer admin", "content-type": "application/json" },
+      body: JSON.stringify({ window: "hourly" })
+    });
+    expect(res.status).toBe(400);
+  });
+});
+
 describe("analytics endpoints", () => {
   it("requires admin for platform analytics", async () => {
     const { createApp } = await import("../app");

@@ -1,3 +1,4 @@
+import { preparePlaybackUrl } from "./playback";
 import { getServiceDb } from "./supabase";
 
 export type FeedItemDto = {
@@ -20,6 +21,8 @@ export type FeedItemDto = {
   shareCount: number;
   watchCount: number;
   isPremium: boolean;
+  /** True when reach is paid (active boost). Clients must label it. */
+  promoted?: boolean;
   createdAt?: string;
 };
 
@@ -43,18 +46,19 @@ export type VideoRow = {
   report_count?: number;
   safety_score?: number;
   duration_seconds?: number | null;
+  is_featured?: boolean;
   created_at: string;
   creators: {
     id: string;
     profile_id: string;
     verification_status: string;
     monetization_enabled?: boolean;
-    profiles: { handle: string; display_name: string; status: string } | null;
+    profiles: { handle: string; display_name: string; status: string; follower_count?: number } | null;
   } | null;
 };
 
 export const VIDEO_SELECT =
-  "id, creator_id, caption, hashtags, category, visibility, moderation_status, coin_unlock_price, required_tier, playback_url, thumbnail_url, like_count, comment_count, share_count, save_count, watch_count, report_count, safety_score, duration_seconds, created_at, creators (id, profile_id, verification_status, monetization_enabled, profiles (handle, display_name, status))";
+  "id, creator_id, caption, hashtags, category, visibility, moderation_status, coin_unlock_price, required_tier, playback_url, thumbnail_url, like_count, comment_count, share_count, save_count, watch_count, report_count, safety_score, duration_seconds, is_featured, created_at, creators (id, profile_id, verification_status, monetization_enabled, profiles (handle, display_name, status, follower_count))";
 
 export function toFeedDto(row: VideoRow): FeedItemDto {
   const locked = row.visibility !== "public";
@@ -72,7 +76,7 @@ export function toFeedDto(row: VideoRow): FeedItemDto {
     coinUnlockPrice: row.coin_unlock_price ?? undefined,
     requiredTier: row.required_tier ?? undefined,
     // Server-side entitlement rule: locked content never exposes playback.
-    playbackUrl: locked ? undefined : (row.playback_url ?? undefined),
+    playbackUrl: locked ? undefined : preparePlaybackUrl(row.playback_url),
     thumbnailUrl: row.thumbnail_url ?? undefined,
     likeCount: row.like_count,
     commentCount: row.comment_count,
@@ -92,6 +96,34 @@ export async function blockedCreatorIds(profileId: string | undefined): Promise<
   const blockedProfiles = data.map((row) => row.blocked_profile_id);
   const { data: creators } = await db.from("creators").select("id").in("profile_id", blockedProfiles);
   return new Set((creators ?? []).map((row) => row.id));
+}
+
+/** Creators the viewer has muted (as creator ids). Soft hide: feeds only. */
+export async function mutedCreatorIds(profileId: string | undefined): Promise<Set<string>> {
+  const db = getServiceDb();
+  if (!db || !profileId) return new Set();
+  const { data } = await db.from("mutes").select("muted_profile_id").eq("muter_id", profileId);
+  if (!data || data.length === 0) return new Set();
+  const mutedProfiles = data.map((row) => row.muted_profile_id);
+  const { data: creators } = await db.from("creators").select("id").in("profile_id", mutedProfiles);
+  return new Set((creators ?? []).map((row) => row.id));
+}
+
+/**
+ * Creators hidden from feed surfaces: blocked (hard, applies everywhere) plus
+ * muted (soft, feeds only — muted creators stay searchable).
+ */
+export async function hiddenCreatorIds(profileId: string | undefined): Promise<Set<string>> {
+  const [blocked, muted] = await Promise.all([blockedCreatorIds(profileId), mutedCreatorIds(profileId)]);
+  return new Set([...blocked, ...muted]);
+}
+
+/** Videos the viewer marked not-interested (excluded from For You). */
+export async function notInterestedVideoIds(profileId: string | undefined): Promise<Set<string>> {
+  const db = getServiceDb();
+  if (!db || !profileId) return new Set();
+  const { data } = await db.from("video_not_interested").select("video_id").eq("profile_id", profileId);
+  return new Set((data ?? []).map((row) => row.video_id));
 }
 
 /**

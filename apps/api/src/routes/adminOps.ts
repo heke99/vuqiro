@@ -2,12 +2,15 @@ import { randomUUID } from "node:crypto";
 import { Hono } from "hono";
 import { z } from "zod";
 import { mockAuditLogs, mockFeatureFlags, mockNotifications } from "@vuqiro/mock-data";
+import { computeDailyRollups } from "../lib/analyticsRollup";
 import { writeAuditLog } from "../lib/audit";
 import { badRequest, forbidden, notFound } from "../lib/errors";
 import { getHealthReport } from "../lib/health";
 import { PLATFORM_SETTING_DEFAULTS, resetPlatformSettingsCache } from "../lib/platformSettings";
+import { processAccountDeletions, processDataExports } from "../lib/privacyWorkers";
 import { processNotificationJobs } from "../lib/pushDelivery";
 import { getServiceDb, isBackendConfigured } from "../lib/supabase";
+import { computeTrendSnapshots } from "../lib/trending";
 import type { AppEnv } from "../middleware/auth";
 import { requireAdmin } from "../middleware/auth";
 
@@ -294,7 +297,7 @@ adminOpsRoutes.put("/platform-settings/:key", requireAdmin("platform_superadmin"
 
 adminOpsRoutes.get("/integration-health", async (c) => {
   const report = await getHealthReport({ deep: c.req.query("deep") === "1" });
-  const checks = [report.database, report.video, report.payments, report.payouts, report.push];
+  const checks = [report.database, report.video, report.payments, report.payouts, report.push, report.email];
 
   // Persist a snapshot so history is visible even after incidents resolve.
   if (isBackendConfigured()) {
@@ -462,4 +465,85 @@ adminOpsRoutes.post("/notifications/broadcast", requireAdmin("platform_superadmi
 adminOpsRoutes.post("/notifications/process-jobs", requireAdmin("platform_superadmin", "admin"), async (c) => {
   const result = await processNotificationJobs();
   return c.json({ ...result, source: isBackendConfigured() ? "db" : "mock" });
+});
+
+// ---------------------------------------------------------------------------
+// Trending snapshots (also invocable by an external cron)
+// ---------------------------------------------------------------------------
+
+/** Recent persisted rate-limit violations (ops visibility). */
+adminOpsRoutes.get("/rate-limit-events", async (c) => {
+  if (!isBackendConfigured()) {
+    return c.json({ events: [], source: "mock" });
+  }
+  const db = getServiceDb()!;
+  const { data, error } = await db
+    .from("rate_limit_events")
+    .select("*")
+    .order("created_at", { ascending: false })
+    .limit(100);
+  if (error) throw badRequest(error.message);
+  return c.json({ events: data ?? [], source: "db" });
+});
+
+const rollupBody = z.object({ date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional() });
+
+/** Runs the daily analytics rollup (defaults to yesterday UTC). */
+adminOpsRoutes.post("/ops/analytics/run", requireAdmin("platform_superadmin", "admin"), async (c) => {
+  const admin = c.get("admin")!;
+  const body = rollupBody.parse(await c.req.json().catch(() => ({})));
+
+  if (!isBackendConfigured()) {
+    return c.json({ date: body.date ?? "yesterday", videos: 0, creators: 0, source: "mock" });
+  }
+  const result = await computeDailyRollups(body.date);
+  await writeAuditLog(admin, {
+    action: "analytics_rollup_run",
+    targetType: "platform_setting",
+    targetId: `analytics_${result?.date ?? "unknown"}`,
+    summary: `Analytics rollup ${result?.date}: ${result?.videos ?? 0} videos, ${result?.creators ?? 0} creators`
+  });
+  return c.json({ ...result, source: "db" });
+});
+
+/** Runs the privacy workers: data exports + due account deletions. */
+adminOpsRoutes.post("/ops/privacy/run", requireAdmin("platform_superadmin", "admin"), async (c) => {
+  const admin = c.get("admin")!;
+  if (!isBackendConfigured()) {
+    return c.json({ exports: { processed: 0 }, deletions: { processed: 0 }, source: "mock" });
+  }
+  const [exports, deletions] = [await processDataExports(), await processAccountDeletions()];
+  await writeAuditLog(admin, {
+    action: "privacy_workers_run",
+    targetType: "platform_setting",
+    targetId: "privacy_workers",
+    summary: `Privacy workers: ${exports.ready} exports ready, ${deletions.completed} deletions completed`
+  });
+  return c.json({ exports, deletions, source: "db" });
+});
+
+const trendingBody = z.object({ window: z.enum(["daily", "weekly"]).default("daily") });
+
+adminOpsRoutes.post("/ops/trending/run", requireAdmin("platform_superadmin", "admin"), async (c) => {
+  const admin = c.get("admin")!;
+  const body = trendingBody.parse(await c.req.json().catch(() => ({})));
+
+  if (!isBackendConfigured()) {
+    await writeAuditLog(admin, {
+      action: "trending_snapshot_run",
+      targetType: "platform_setting",
+      targetId: `trending_${body.window}`,
+      summary: `Trending snapshot run (${body.window}, mock mode)`
+    });
+    return c.json({ captured: 0, window: body.window, source: "mock" });
+  }
+
+  const result = await computeTrendSnapshots(body.window);
+  await writeAuditLog(admin, {
+    action: "trending_snapshot_run",
+    targetType: "platform_setting",
+    targetId: `trending_${body.window}`,
+    summary: `Trending snapshot run (${body.window}): ${result?.captured ?? 0} rows`
+  });
+  return c.json({ ...result, window: body.window, source: "db" });
 });

@@ -1,4 +1,5 @@
 import { AdminPageHeader, AdminStatusBadge, AdminTable } from "@vuqiro/ui/admin";
+import { AdminApiAction } from "../../components/AdminApiAction";
 import { ErrorBanner, guardPage } from "../../components/PageGuard";
 import { adminApiFetch } from "../../lib/adminApi";
 import { fieldDate, fieldStr, type Row } from "../../lib/rows";
@@ -12,9 +13,10 @@ export default async function IntegrationHealthPage() {
   const { denied } = await guardPage("/integration-health");
   if (denied) return denied;
 
-  const [health, history] = await Promise.all([
+  const [health, history, rateLimitEvents] = await Promise.all([
     adminApiFetch<HealthData>("/admin/integration-health?deep=1"),
-    adminApiFetch<{ history: Row[] }>("/admin/integration-health/history")
+    adminApiFetch<{ history: Row[] }>("/admin/integration-health/history"),
+    adminApiFetch<{ events: Row[] }>("/admin/rate-limit-events")
   ]);
 
   return (
@@ -59,6 +61,40 @@ export default async function IntegrationHealthPage() {
           </div>
         </>
       ) : null}
+
+      <div className="section-header">
+        <h2>Scheduled jobs</h2>
+      </div>
+      <div className="card">
+        <div className="metric-hint">
+          These jobs are normally run by an external cron hitting the same endpoints. Trigger them manually here when
+          needed; every run is audit-logged.
+        </div>
+        <div className="actions-cell" style={{ marginTop: 10 }}>
+          <AdminApiAction label="Run trending snapshot (daily)" path="/admin/ops/trending/run" body={{ window: "daily" }} />
+          <AdminApiAction label="Run trending snapshot (weekly)" path="/admin/ops/trending/run" body={{ window: "weekly" }} />
+          <AdminApiAction label="Process notification jobs" path="/admin/notifications/process-jobs" />
+          <AdminApiAction label="Run privacy workers (exports + deletions)" path="/admin/ops/privacy/run" />
+          <AdminApiAction label="Run analytics rollup (yesterday)" path="/admin/ops/analytics/run" />
+        </div>
+      </div>
+
+      <div className="section-header">
+        <h2>Rate limit violations</h2>
+      </div>
+      {rateLimitEvents.ok && rateLimitEvents.data.events.length > 0 ? (
+        <AdminTable<Row>
+          columns={[
+            { key: "scope", header: "Scope", render: (event) => <strong>{fieldStr(event, "scope")}</strong> },
+            { key: "key", header: "Limiter key", render: (event) => fieldStr(event, "limiter_key").slice(0, 60) },
+            { key: "limit", header: "Limit", render: (event) => `${fieldStr(event, "limit_max")} / ${Number(fieldStr(event, "window_ms")) / 1000}s` },
+            { key: "when", header: "When", render: (event) => fieldDate(event, "created_at") }
+          ]}
+          rows={rateLimitEvents.data.events}
+        />
+      ) : (
+        <div className="empty-state">No rate-limit violations recorded.</div>
+      )}
 
       <div className="section-header">
         <h2>Check history</h2>

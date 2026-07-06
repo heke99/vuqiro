@@ -51,6 +51,49 @@ creatorRoutes.get("/:id", async (c) => {
   });
 });
 
+/** Public follower list (public profile fields only, active accounts only). */
+creatorRoutes.get("/:id/followers", async (c) => {
+  const id = idParam.parse(c.req.param("id"));
+  const limit = Math.min(Math.max(Number(c.req.query("limit") ?? "50"), 1), 100);
+  const offset = Math.max(Number(c.req.query("offset") ?? "0"), 0);
+
+  if (!isBackendConfigured()) {
+    return c.json({ followers: [], total: 0, source: "mock" });
+  }
+
+  const db = getServiceDb()!;
+  const { data, error, count } = await db
+    .from("follows")
+    .select("id, created_at, profiles!follows_follower_id_fkey (id, handle, display_name, avatar_url, status)", {
+      count: "exact"
+    })
+    .eq("creator_id", id)
+    .order("created_at", { ascending: false })
+    .range(offset, offset + limit - 1);
+  if (error) throw badRequest(error.message);
+
+  const followers = (data ?? [])
+    .map((row) => {
+      const follower = row.profiles as unknown as {
+        id: string;
+        handle: string;
+        display_name: string;
+        avatar_url: string | null;
+        status: string;
+      } | null;
+      if (!follower || follower.status !== "active") return null;
+      return {
+        profileId: follower.id,
+        handle: follower.handle,
+        displayName: follower.display_name,
+        avatarUrl: follower.avatar_url ?? undefined,
+        followedAt: row.created_at
+      };
+    })
+    .filter(Boolean);
+  return c.json({ followers, total: count ?? followers.length, source: "db" });
+});
+
 creatorRoutes.post("/:id/follow", requireUser, async (c) => {
   const id = idParam.parse(c.req.param("id"));
   const profile = c.get("profile")!;

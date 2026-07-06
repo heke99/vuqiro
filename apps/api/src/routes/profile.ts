@@ -4,6 +4,7 @@ import { z } from "zod";
 import { badRequest, notFound } from "../lib/errors";
 import { enforceRateLimit } from "../lib/rateLimit";
 import { getServiceDb, isBackendConfigured } from "../lib/supabase";
+import { safeHttpUrl } from "../lib/validation";
 import type { AppEnv } from "../middleware/auth";
 import { attachUser, requireUser } from "../middleware/auth";
 
@@ -65,10 +66,10 @@ profileRoutes.get("/me", requireUser, async (c) => {
 const profilePatch = z.object({
   displayName: z.string().trim().max(80).optional(),
   bio: z.string().trim().max(500).optional(),
-  websiteUrl: z.string().url().nullable().optional(),
+  websiteUrl: safeHttpUrl.nullable().optional(),
   country: z.string().length(2).nullable().optional(),
   language: z.string().min(2).max(8).nullable().optional(),
-  avatarUrl: z.string().url().nullable().optional()
+  avatarUrl: safeHttpUrl.nullable().optional()
 });
 
 profileRoutes.patch("/me", requireUser, async (c) => {
@@ -325,6 +326,208 @@ profileRoutes.get("/me/blocks", requireUser, async (c) => {
         handle: blocked?.handle ?? "unknown",
         displayName: blocked?.display_name ?? "Unknown",
         avatarUrl: blocked?.avatar_url ?? undefined,
+        createdAt: row.created_at
+      };
+    }),
+    source: "db"
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Saved / liked videos and following list
+// ---------------------------------------------------------------------------
+
+const VIDEO_LIST_SELECT =
+  "id, created_at, videos (id, creator_id, caption, hashtags, visibility, status, moderation_status, thumbnail_url, playback_url, like_count, comment_count, share_count, watch_count, duration_seconds, creators (id, verification_status, profiles (handle, display_name)))";
+
+type SavedVideoRow = {
+  id: string;
+  created_at: string;
+  videos: {
+    id: string;
+    creator_id: string;
+    caption: string;
+    hashtags: string[];
+    visibility: string;
+    status: string;
+    moderation_status: string;
+    thumbnail_url: string | null;
+    playback_url: string | null;
+    like_count: number;
+    comment_count: number;
+    share_count: number;
+    watch_count: number;
+    duration_seconds: number | null;
+    creators: {
+      id: string;
+      verification_status: string;
+      profiles: { handle: string; display_name: string } | null;
+    } | null;
+  } | null;
+};
+
+function toOwnedVideoItem(row: SavedVideoRow) {
+  const video = row.videos;
+  if (!video) return null;
+  // Removed/blocked content stays out of personal collections too.
+  if (video.status !== "ready" || !["visible", "limited", "age_restricted"].includes(video.moderation_status)) {
+    return null;
+  }
+  const locked = video.visibility !== "public";
+  return {
+    id: video.id,
+    creatorId: video.creator_id,
+    creatorHandle: video.creators?.profiles?.handle ?? "unknown",
+    creatorDisplayName: video.creators?.profiles?.display_name ?? "Unknown",
+    creatorVerified: video.creators?.verification_status === "verified",
+    caption: video.caption,
+    hashtags: video.hashtags,
+    visibility: video.visibility,
+    moderationStatus: video.moderation_status,
+    thumbnailUrl: video.thumbnail_url ?? undefined,
+    playbackUrl: locked ? undefined : (video.playback_url ?? undefined),
+    likeCount: video.like_count,
+    commentCount: video.comment_count,
+    shareCount: video.share_count,
+    watchCount: Number(video.watch_count),
+    isPremium: locked,
+    savedAt: row.created_at
+  };
+}
+
+profileRoutes.get("/me/saves", requireUser, async (c) => {
+  const profile = c.get("profile")!;
+  if (!isBackendConfigured()) {
+    return c.json({ items: [], source: "mock" });
+  }
+  const db = getServiceDb()!;
+  const { data, error } = await db
+    .from("saves")
+    .select(VIDEO_LIST_SELECT)
+    .eq("profile_id", profile.id)
+    .order("created_at", { ascending: false })
+    .limit(100);
+  if (error) throw badRequest(error.message);
+  const items = ((data ?? []) as unknown as SavedVideoRow[]).map(toOwnedVideoItem).filter(Boolean);
+  return c.json({ items, source: "db" });
+});
+
+profileRoutes.get("/me/likes", requireUser, async (c) => {
+  const profile = c.get("profile")!;
+  if (!isBackendConfigured()) {
+    return c.json({ items: [], source: "mock" });
+  }
+  const db = getServiceDb()!;
+  const { data, error } = await db
+    .from("likes")
+    .select(VIDEO_LIST_SELECT)
+    .eq("profile_id", profile.id)
+    .order("created_at", { ascending: false })
+    .limit(100);
+  if (error) throw badRequest(error.message);
+  const items = ((data ?? []) as unknown as SavedVideoRow[]).map(toOwnedVideoItem).filter(Boolean);
+  return c.json({ items, source: "db" });
+});
+
+profileRoutes.get("/me/following", requireUser, async (c) => {
+  const profile = c.get("profile")!;
+  if (!isBackendConfigured()) {
+    return c.json({ following: [], source: "mock" });
+  }
+  const db = getServiceDb()!;
+  const { data, error } = await db
+    .from("follows")
+    .select("id, creator_id, created_at, creators (id, verification_status, profiles (handle, display_name, avatar_url, follower_count))")
+    .eq("follower_id", profile.id)
+    .order("created_at", { ascending: false })
+    .limit(500);
+  if (error) throw badRequest(error.message);
+  return c.json({
+    following: (data ?? []).map((row) => {
+      const creator = row.creators as unknown as {
+        id: string;
+        verification_status: string;
+        profiles: { handle: string; display_name: string; avatar_url: string | null; follower_count: number } | null;
+      } | null;
+      return {
+        creatorId: row.creator_id,
+        handle: creator?.profiles?.handle ?? "unknown",
+        displayName: creator?.profiles?.display_name ?? "Unknown",
+        avatarUrl: creator?.profiles?.avatar_url ?? undefined,
+        isVerified: creator?.verification_status === "verified",
+        followerCount: creator?.profiles?.follower_count ?? 0,
+        followedAt: row.created_at
+      };
+    }),
+    source: "db"
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Recent searches (reuses search_events; no separate history table)
+// ---------------------------------------------------------------------------
+
+profileRoutes.get("/me/searches", requireUser, async (c) => {
+  const profile = c.get("profile")!;
+  if (!isBackendConfigured()) {
+    return c.json({ searches: [], source: "mock" });
+  }
+  const db = getServiceDb()!;
+  const { data, error } = await db
+    .from("search_events")
+    .select("query, created_at")
+    .eq("profile_id", profile.id)
+    .order("created_at", { ascending: false })
+    .limit(50);
+  if (error) throw badRequest(error.message);
+  const seen = new Set<string>();
+  const searches: { query: string; at: string }[] = [];
+  for (const row of data ?? []) {
+    const normalized = row.query.toLowerCase();
+    if (seen.has(normalized)) continue;
+    seen.add(normalized);
+    searches.push({ query: row.query, at: row.created_at });
+    if (searches.length >= 10) break;
+  }
+  return c.json({ searches, source: "db" });
+});
+
+profileRoutes.delete("/me/searches", requireUser, async (c) => {
+  const profile = c.get("profile")!;
+  if (!isBackendConfigured()) {
+    return c.json({ cleared: true, source: "mock" });
+  }
+  const db = getServiceDb()!;
+  const { error } = await db.from("search_events").delete().eq("profile_id", profile.id);
+  if (error) throw badRequest(error.message);
+  return c.json({ cleared: true, source: "db" });
+});
+
+// ---------------------------------------------------------------------------
+// Muted users
+// ---------------------------------------------------------------------------
+
+profileRoutes.get("/me/mutes", requireUser, async (c) => {
+  const profile = c.get("profile")!;
+  if (!isBackendConfigured()) {
+    return c.json({ mutes: [], source: "mock" });
+  }
+  const db = getServiceDb()!;
+  const { data, error } = await db
+    .from("mutes")
+    .select("id, muted_profile_id, created_at, muted:profiles!mutes_muted_profile_id_fkey (handle, display_name, avatar_url)")
+    .eq("muter_id", profile.id)
+    .order("created_at", { ascending: false });
+  if (error) throw badRequest(error.message);
+  return c.json({
+    mutes: (data ?? []).map((row) => {
+      const muted = row.muted as unknown as { handle: string; display_name: string; avatar_url: string | null } | null;
+      return {
+        id: row.id,
+        profileId: row.muted_profile_id,
+        handle: muted?.handle ?? "unknown",
+        displayName: muted?.display_name ?? "Unknown",
+        avatarUrl: muted?.avatar_url ?? undefined,
         createdAt: row.created_at
       };
     }),

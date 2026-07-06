@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { AdminPageHeader, AdminStatusBadge, AdminTable } from "@vuqiro/ui/admin";
 import { AdminApiAction } from "../../components/AdminApiAction";
 import { ErrorBanner, guardPage } from "../../components/PageGuard";
@@ -60,7 +61,12 @@ export default async function VideosPage({
                 const profile = (creators.profiles ?? {}) as Row;
                 return (
                   <>
-                    <strong>{fieldStr(video, "caption").slice(0, 70) || "(no caption)"}</strong>
+                    <strong>
+                      <Link href={`/videos/${fieldStr(video, "id")}`}>
+                        {fieldStr(video, "caption").slice(0, 70) || "(no caption)"}
+                      </Link>
+                    </strong>
+                    {field<boolean>(video, "is_featured", "isFeatured") === true ? " ★" : ""}
                     <br />@{fieldStr(profile, "handle") || fieldStr(video, "creatorId", "creator_id")}
                   </>
                 );
@@ -107,6 +113,11 @@ export default async function VideosPage({
                     ) : (
                       <AdminApiAction label="Mark ad-ineligible" path={`/admin/videos/${id}/ad-ineligible`} />
                     )}
+                    {field<boolean>(video, "is_featured", "isFeatured") === true ? (
+                      <AdminApiAction label="Unfeature" path={`/admin/videos/${id}/unfeature`} />
+                    ) : moderation === "visible" ? (
+                      <AdminApiAction label="Feature" path={`/admin/videos/${id}/feature`} variant="success" />
+                    ) : null}
                   </div>
                 );
               }

@@ -4,13 +4,14 @@ import { createBrowserClient } from "@supabase/ssr";
 import { useRouter } from "next/navigation";
 import React, { useEffect, useState } from "react";
 
-const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL ?? null;
+const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3002";
 
 /**
- * Admin action button that calls the Vuqiro API when configured
- * (NEXT_PUBLIC_API_URL + Supabase session token) and shows a mock
- * confirmation otherwise. Server-side the action is RBAC-checked and
- * audit-logged.
+ * Admin action button that calls the Vuqiro API (NEXT_PUBLIC_API_URL,
+ * defaulting to the local dev API) with the admin's Supabase session token.
+ * Server-side the action is RBAC-checked and audit-logged. Failures —
+ * including an unreachable API — surface as error flashes; there is no
+ * client-side mock success path.
  */
 export function AdminApiAction({
   label,
@@ -36,10 +37,6 @@ export function AdminApiAction({
   }, [flash]);
 
   const run = async () => {
-    if (!apiBaseUrl) {
-      setFlash(`${label}: recorded (mock). Set NEXT_PUBLIC_API_URL for live actions.`);
-      return;
-    }
     setBusy(true);
     try {
       const headers: Record<string, string> = { "content-type": "application/json" };
@@ -52,6 +49,7 @@ export function AdminApiAction({
         if (data.session) headers.authorization = `Bearer ${data.session.access_token}`;
       } else {
         headers.authorization = "Bearer mock-admin";
+        headers["x-mock-admin"] = "1";
       }
       const response = await fetch(`${apiBaseUrl}${path}`, {
         method,

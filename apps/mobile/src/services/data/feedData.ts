@@ -28,12 +28,15 @@ type FeedItemDto = {
   shareCount: number;
   watchCount: number;
   isPremium: boolean;
+  promoted?: boolean;
   createdAt?: string;
 };
 
 type FeedResponseItem = FeedItemDto | (ServedAd & { kind: "ad" });
 
-function dtoToEntry(dto: FeedItemDto): FeedEntry {
+export type { FeedItemDto };
+
+export function dtoToEntry(dto: FeedItemDto): { kind: "video"; video: Video; creator: Creator } {
   return {
     kind: "video",
     video: {
@@ -54,6 +57,7 @@ function dtoToEntry(dto: FeedItemDto): FeedEntry {
       shareCount: dto.shareCount,
       watchCount: dto.watchCount,
       isPremium: dto.isPremium,
+      promoted: dto.promoted,
       safetyScore: 100,
       createdAt: dto.createdAt
     },
@@ -97,6 +101,19 @@ export function mockFeedEntries(): FeedEntry[] {
     }
   });
   return entries;
+}
+
+/**
+ * One-shot video feed (hashtag/sound/creator surfaces). Returns video
+ * entries only — these surfaces are ad-free.
+ */
+export async function fetchVideoFeed(path: string): Promise<{ entries: FeedEntry[]; isLive: boolean }> {
+  if (!isApiConfigured()) {
+    return { entries: [], isLive: false };
+  }
+  const response = await apiFetch<{ items: FeedResponseItem[]; source: string }>(path);
+  const entries = response.items.map(responseItemToEntry).filter((entry) => entry.kind === "video");
+  return { entries, isLive: response.source === "db" };
 }
 
 /**

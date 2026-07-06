@@ -36,6 +36,14 @@ export default async function RevenuePage() {
           <AdminMetricCard key={source} label={source} value={usd(cents)} />
         ))}
       </div>
+      <div className="row" style={{ marginBottom: 14 }}>
+        <a className="button small" href="/api/export/platform-revenue" download>
+          Export platform ledger (CSV)
+        </a>
+        <a className="button small" href="/api/export/creator-revenue" download>
+          Export creator ledger (CSV)
+        </a>
+      </div>
 
       <div className="section-header">
         <h2>Platform revenue ledger</h2>

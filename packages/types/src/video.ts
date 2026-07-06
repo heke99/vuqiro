@@ -44,6 +44,8 @@ export type Video = {
   reportCount?: number;
   revenue?: number;
   isPremium: boolean;
+  /** True when reach is paid (active boost); UI must show a Promoted label. */
+  promoted?: boolean;
   safetyScore: number;
   createdAt?: string;
 };
