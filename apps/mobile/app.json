@@ -32,7 +32,11 @@
       "favicon": "./assets/favicon.png"
     },
     "extra": {
-      "companyName": "Diversa Solutions LLC"
+      "companyName": "Diversa Solutions LLC",
+      "router": {},
+      "eas": {
+        "projectId": "437b3a9b-ce2c-4654-9ecb-9bebb9635b63"
+      }
     },
     "plugins": [
       "expo-router",
