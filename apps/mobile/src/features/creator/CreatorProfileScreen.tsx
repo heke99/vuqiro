@@ -1,8 +1,8 @@
+import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import React, { useEffect, useState } from "react";
 import { ActivityIndicator, Image, Pressable, StyleSheet, Text, View } from "react-native";
-import type { Creator, Video } from "@vuqiro/types";
 import { Avatar } from "../../components/Avatar";
 import { Badge } from "../../components/Badge";
 import { Button } from "../../components/Button";
@@ -10,14 +10,14 @@ import { Card } from "../../components/Card";
 import { Screen } from "../../components/Screen";
 import { colors, gradients, spacing } from "../../design/theme";
 import { isApiConfigured } from "../../services/api/client";
-import { fetchCreatorProfile } from "../../services/data/creatorData";
+import { fetchCreatorProfile, type CreatorProfileData } from "../../services/data/creatorData";
 import { openConversation } from "../../services/data/messagesData";
 import { useSocial } from "../social/SocialContext";
 
 export function CreatorProfileScreen({ creatorId }: { creatorId: string }) {
   const router = useRouter();
   const social = useSocial();
-  const [data, setData] = useState<{ creator: Creator; videos: Video[] } | null | undefined>(undefined);
+  const [data, setData] = useState<CreatorProfileData | null | undefined>(undefined);
   const [messageState, setMessageState] = useState<"idle" | "busy">("idle");
   const [messageError, setMessageError] = useState<string | null>(null);
 
@@ -60,7 +60,7 @@ export function CreatorProfileScreen({ creatorId }: { creatorId: string }) {
     );
   }
 
-  const { creator, videos } = data;
+  const { creator, videos, lockedCount, teasers } = data;
   const following = social.isFollowing(creator.id);
   const blocked = social.isBlocked(creator.id);
   const onSubscribe = () =>
@@ -165,7 +165,7 @@ export function CreatorProfileScreen({ creatorId }: { creatorId: string }) {
         <Badge label="Premium" tone="secondary" />
         <Badge label="About" />
       </View>
-      {videos.length === 0 ? (
+      {videos.length === 0 && lockedCount === 0 && teasers.length === 0 ? (
         <Card style={{ alignItems: "center", padding: spacing.xl }}>
           <Text style={styles.videoMeta}>No videos yet.</Text>
         </Card>
@@ -182,10 +182,42 @@ export function CreatorProfileScreen({ creatorId }: { creatorId: string }) {
               <Text style={styles.videoTitle}>{video.caption}</Text>
               <Text style={styles.videoMeta}>{video.watchCount.toLocaleString()} views • {video.visibility.replaceAll("_", " ")}</Text>
             </View>
-            {video.isPremium ? <Badge label="Locked" tone="warning" /> : <Badge label="Open" tone="secondary" />}
+            {video.visibility !== "public" ? <Badge label="Unlocked" tone="secondary" /> : <Badge label="Open" tone="secondary" />}
           </Card>
         </Pressable>
       ))}
+      {teasers.map((teaser) => (
+        <Pressable
+          key={teaser.id}
+          onPress={() => router.push({ pathname: "/modals/locked-content", params: { videoId: teaser.id } })}
+        >
+          <Card style={styles.videoRow}>
+            <View style={[styles.thumb, styles.lockedThumb]}>
+              <Ionicons name="lock-closed" size={18} color={colors.secondary} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.videoTitle}>{teaser.caption}</Text>
+              <Text style={styles.videoMeta}>
+                {teaser.coinUnlockPrice ? `Unlock for ${teaser.coinUnlockPrice} coins` : "Locked"}
+              </Text>
+            </View>
+            <Badge label="Locked" tone="warning" />
+          </Card>
+        </Pressable>
+      ))}
+      {lockedCount > 0 ? (
+        <Card style={styles.membersCard}>
+          <Ionicons name="lock-closed" size={22} color={colors.secondary} />
+          <Text style={styles.membersTitle}>
+            {lockedCount} members-only {lockedCount === 1 ? "video" : "videos"}
+          </Text>
+          <Text style={styles.membersCopy}>
+            Become a member to unlock {creator.displayName}&apos;s exclusive videos. Everything else here stays free
+            to watch.
+          </Text>
+          <Button label="Become a member" onPress={onSubscribe} />
+        </Card>
+      ) : null}
     </Screen>
   );
 }
@@ -207,7 +239,11 @@ const styles = StyleSheet.create({
   tabs: { flexDirection: "row", gap: spacing.sm, marginBottom: spacing.md },
   videoRow: { flexDirection: "row", gap: spacing.md, alignItems: "center", marginBottom: spacing.md },
   thumb: { width: 58, height: 74, borderRadius: 16, backgroundColor: colors.primarySoft },
+  lockedThumb: { alignItems: "center", justifyContent: "center" },
   videoTitle: { color: colors.text, fontWeight: "800", marginBottom: 4 },
   videoMeta: { color: colors.textMuted, fontSize: 12 },
+  membersCard: { alignItems: "center", gap: spacing.sm, padding: spacing.xl, marginBottom: spacing.md },
+  membersTitle: { color: colors.text, fontSize: 18, fontWeight: "900" },
+  membersCopy: { color: colors.textSoft, textAlign: "center", lineHeight: 20, maxWidth: 300 },
   messageError: { color: colors.warning, fontSize: 12, marginBottom: spacing.md, textAlign: "center" }
 });

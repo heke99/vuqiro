@@ -85,21 +85,25 @@ function responseItemToEntry(item: FeedResponseItem): FeedEntry {
 
 const MOCK_AD_FREQUENCY = 6;
 
-/** Deterministic mock feed with sponsored cards interleaved (dev/test only). */
+/** Deterministic mock feed with sponsored cards interleaved (dev/test only).
+ * Mirrors the API's anonymous-viewer rules: the public feed only contains
+ * public videos (members-only/private never appear as teasers). */
 export function mockFeedEntries(): FeedEntry[] {
   const entries: FeedEntry[] = [];
   let adIndex = 0;
-  mockVideos.forEach((video, index) => {
-    entries.push({
-      kind: "video",
-      video,
-      creator: mockCreators.find((candidate) => candidate.id === video.creatorId) ?? mockCreators[0]
+  mockVideos
+    .filter((video) => video.visibility === "public")
+    .forEach((video, index) => {
+      entries.push({
+        kind: "video",
+        video,
+        creator: mockCreators.find((candidate) => candidate.id === video.creatorId) ?? mockCreators[0]
+      });
+      if ((index + 1) % MOCK_AD_FREQUENCY === 0 && mockServedAds.length > 0) {
+        entries.push({ kind: "ad", ad: mockServedAds[adIndex % mockServedAds.length] });
+        adIndex += 1;
+      }
     });
-    if ((index + 1) % MOCK_AD_FREQUENCY === 0 && mockServedAds.length > 0) {
-      entries.push({ kind: "ad", ad: mockServedAds[adIndex % mockServedAds.length] });
-      adIndex += 1;
-    }
-  });
   return entries;
 }
 
