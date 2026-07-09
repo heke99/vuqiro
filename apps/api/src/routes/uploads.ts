@@ -4,6 +4,7 @@ import { getVideoProvider } from "@vuqiro/services";
 import { badRequest, forbidden, notFound } from "../lib/errors";
 import { checkRapidUploads } from "../lib/fraudSignals";
 import { precheckModeration } from "../lib/moderationPrecheck";
+import { preparePlaybackUrl } from "../lib/playback";
 import { enforceRateLimit } from "../lib/rateLimit";
 import { getServiceDb, isBackendConfigured } from "../lib/supabase";
 import type { AppEnv } from "../middleware/auth";
@@ -185,7 +186,9 @@ uploadRoutes.get("/videos/:id/status", requireUser, async (c) => {
     videoId: video.id,
     status: video.status,
     moderationStatus: video.moderation_status,
-    playbackUrl: video.playback_url,
+    // Owner-only response, but signed like every other playback URL so
+    // signed-policy assets are playable and URLs stay short-lived.
+    playbackUrl: preparePlaybackUrl(video.playback_url),
     thumbnailUrl: video.thumbnail_url,
     source: "db"
   });

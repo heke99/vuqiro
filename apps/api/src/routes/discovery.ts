@@ -4,13 +4,20 @@ import { mockCreators, mockVideos } from "@vuqiro/mock-data";
 import {
   applyFeedRules,
   blockedCreatorIds,
+  filterViewableRows,
+  rowToAccessVideo,
+  shouldExcludeDemoContent,
   toFeedDto,
+  toLockedTeaserDto,
+  VIDEO_SELECT,
   visibleVideosQuery,
+  type LockedTeaserDto,
   type VideoRow
 } from "../lib/feedQuery";
 import { badRequest } from "../lib/errors";
 import { getServiceDb, isBackendConfigured } from "../lib/supabase";
 import { latestTrendSnapshots } from "../lib/trending";
+import { canViewVideo, getVisibleVideosForViewer, loadViewerContext } from "../lib/videoAccess";
 import type { AppEnv } from "../middleware/auth";
 import { attachUser } from "../middleware/auth";
 
@@ -48,7 +55,9 @@ async function dbCreatorSummaries(): Promise<CreatorSummary[]> {
   const db = getServiceDb()!;
   const { data } = await db
     .from("creators")
-    .select("id, category, verification_status, monetization_enabled, created_at, profiles (handle, display_name, status)")
+    .select(
+      "id, category, verification_status, monetization_enabled, created_at, profiles (handle, display_name, status, is_demo)"
+    )
     .limit(200);
   const rows = (data ?? []) as unknown as {
     id: string;
@@ -56,10 +65,13 @@ async function dbCreatorSummaries(): Promise<CreatorSummary[]> {
     verification_status: string;
     monetization_enabled: boolean;
     created_at: string;
-    profiles: { handle: string; display_name: string; status: string } | null;
+    profiles: { handle: string; display_name: string; status: string; is_demo?: boolean } | null;
   }[];
 
-  const active = rows.filter((row) => row.profiles?.status === "active");
+  const excludeDemo = shouldExcludeDemoContent();
+  const active = rows.filter(
+    (row) => row.profiles?.status === "active" && !(excludeDemo && row.profiles?.is_demo === true)
+  );
   const counts = await Promise.all(
     active.map(async (row) => {
       const [{ count: followers }, { count: subscribers }] = await Promise.all([
@@ -94,6 +106,8 @@ async function dbCreatorSummaries(): Promise<CreatorSummary[]> {
 discoveryRoutes.get("/search", async (c) => {
   const query = z.string().trim().min(1).max(80).parse(c.req.query("q") ?? "");
   const term = query.toLowerCase().replace(/^#/, "");
+  const profile = c.get("profile");
+  const viewer = await loadViewerContext(profile?.id);
 
   if (!isBackendConfigured()) {
     const creators = mockCreatorSummaries().filter(
@@ -102,19 +116,25 @@ discoveryRoutes.get("/search", async (c) => {
         creator.displayName.toLowerCase().includes(term) ||
         (creator.category ?? "").toLowerCase().includes(term)
     );
-    const videos = mockVideos.filter(
-      (video) =>
-        video.caption.toLowerCase().includes(term) ||
-        video.hashtags.some((tag) => tag.includes(term)) ||
-        (video.category ?? "").toLowerCase().includes(term)
-    );
-    const hashtags = [...new Set(mockVideos.flatMap((video) => video.hashtags))].filter((tag) =>
-      tag.includes(term)
-    );
+    // Search only surfaces videos the viewer may watch, and strips playback
+    // from gated results (playback goes through /videos/:id/access).
+    const videos = getVisibleVideosForViewer(viewer, mockVideos)
+      .filter(
+        (video) =>
+          video.caption.toLowerCase().includes(term) ||
+          video.hashtags.some((tag) => tag.includes(term)) ||
+          (video.category ?? "").toLowerCase().includes(term)
+      )
+      .map((video) => ({
+        ...video,
+        isPremium: video.visibility !== "public",
+        playbackUrl: video.visibility === "public" ? video.playbackUrl : undefined
+      }));
+    const searchableTags = getVisibleVideosForViewer(viewer, mockVideos).flatMap((video) => video.hashtags);
+    const hashtags = [...new Set(searchableTags)].filter((tag) => tag.includes(term));
     return c.json({ creators, videos, hashtags, source: "mock" });
   }
 
-  const profile = c.get("profile");
   const blocked = await blockedCreatorIds(profile?.id);
   const db = getServiceDb()!;
 
@@ -124,10 +144,13 @@ discoveryRoutes.get("/search", async (c) => {
   ]);
   if (error) throw badRequest(error.message);
 
+  // Hashtag suggestions only come from public videos: gated content must not
+  // leak its tags into public search suggestions.
   const { data: tagRows } = await db
     .from("videos")
     .select("hashtags")
     .eq("status", "ready")
+    .eq("visibility", "public")
     .in("moderation_status", ["visible", "limited"])
     .limit(500);
   const hashtags = [...new Set((tagRows ?? []).flatMap((row) => row.hashtags as string[]))].filter((tag) =>
@@ -136,9 +159,12 @@ discoveryRoutes.get("/search", async (c) => {
 
   const { data: tagVideoRows } = await visibleVideosQuery().contains("hashtags", [term]).limit(25);
 
-  const videoItems = applyFeedRules(
-    [...((videoRows ?? []) as unknown as VideoRow[]), ...((tagVideoRows ?? []) as unknown as VideoRow[])],
-    blocked
+  const videoItems = filterViewableRows(
+    viewer,
+    applyFeedRules(
+      [...((videoRows ?? []) as unknown as VideoRow[]), ...((tagVideoRows ?? []) as unknown as VideoRow[])],
+      blocked
+    )
   );
   const uniqueVideos = [...new Map(videoItems.map((row) => [row.id, row])).values()].map(toFeedDto);
 
@@ -165,7 +191,8 @@ discoveryRoutes.get("/discover/trending", async (c) => {
   if (!isBackendConfigured()) {
     const creators = mockCreatorSummaries();
     const hashtagCounts = new Map<string, number>();
-    for (const video of mockVideos) {
+    // Trending is a public surface: only public videos feed its signals.
+    for (const video of mockVideos.filter((candidate) => candidate.visibility === "public")) {
       for (const tag of video.hashtags) {
         hashtagCounts.set(tag, (hashtagCounts.get(tag) ?? 0) + video.watchCount);
       }
@@ -201,7 +228,12 @@ discoveryRoutes.get("/discover/trending", async (c) => {
   let trendingCreatorIds: string[] = [];
 
   if (snapshots && snapshots.videoIds.length > 0) {
-    const { data: videoRows } = await visibleVideosQuery().in("id", snapshots.videoIds).limit(50);
+    // Snapshots are computed from public videos only; the visibility filter
+    // here is defense in depth against stale snapshots.
+    const { data: videoRows } = await visibleVideosQuery()
+      .eq("visibility", "public")
+      .in("id", snapshots.videoIds)
+      .limit(50);
     const rankOrder = new Map(snapshots.videoIds.map((id, index) => [id, index]));
     topVideos = applyFeedRules((videoRows ?? []) as unknown as VideoRow[], blocked).sort(
       (a, b) => (rankOrder.get(a.id) ?? 99) - (rankOrder.get(b.id) ?? 99)
@@ -221,7 +253,9 @@ discoveryRoutes.get("/discover/trending", async (c) => {
   }
 
   if (topVideos.length === 0) {
+    // Live fallback mirrors the snapshot job: public videos only.
     const { data: videoRows, error } = await visibleVideosQuery()
+      .eq("visibility", "public")
       .order("watch_count", { ascending: false })
       .limit(50);
     if (error) throw badRequest(error.message);
@@ -324,25 +358,78 @@ discoveryRoutes.get("/sounds", async (c) => {
   });
 });
 
-/** A creator's public storefront feed. Locked items are metadata-only. */
+/**
+ * A creator's profile/storefront feed, per-viewer:
+ *
+ * - `items`: only the videos this viewer may watch (public for everyone;
+ *   members-only/followers-only appear once the viewer has access; owners
+ *   see everything including private).
+ * - `lockedCount`: how many gated videos exist that the viewer cannot see —
+ *   an aggregate only, so profiles can render a "members-only" summary card
+ *   without leaking per-video metadata.
+ * - `teasers`: sanitized storefront teasers for coin-unlockable videos the
+ *   viewer has not purchased (caption + price, never playback/thumbnails).
+ */
 discoveryRoutes.get("/creators/:id/videos", async (c) => {
   const id = z.string().min(1).max(64).parse(c.req.param("id"));
+  const profile = c.get("profile");
+  const viewer = await loadViewerContext(profile?.id);
 
   if (!isBackendConfigured()) {
-    const items = mockVideos.filter((video) => video.creatorId === id);
-    return c.json({ items, source: "mock" });
+    const creatorVideos = mockVideos.filter((video) => video.creatorId === id);
+    const items = getVisibleVideosForViewer(viewer, creatorVideos).map((video) => ({
+      ...video,
+      isPremium: video.visibility !== "public",
+      playbackUrl: video.visibility === "public" ? video.playbackUrl : undefined,
+      thumbnailUrl: video.visibility === "public" ? video.thumbnailUrl : undefined
+    }));
+    const hidden = creatorVideos.filter(
+      (video) =>
+        !canViewVideo(viewer, video) && (video.status ?? "ready") === "ready" && video.visibility !== "private"
+    );
+    const teasers: LockedTeaserDto[] = hidden
+      .filter((video) => video.visibility === "unlock_with_coins")
+      .map((video) =>
+        toLockedTeaserDto({
+          id: video.id,
+          creator_id: video.creatorId,
+          caption: video.caption,
+          visibility: video.visibility,
+          coin_unlock_price: video.coinUnlockPrice ?? null,
+          required_tier: video.requiredTier ?? null,
+          like_count: video.likeCount,
+          watch_count: video.watchCount
+        })
+      );
+    const lockedCount = hidden.length - teasers.length;
+    return c.json({ items, lockedCount, teasers, source: "mock" });
   }
 
-  const profile = c.get("profile");
   const blocked = await blockedCreatorIds(profile?.id);
-  if (blocked.has(id)) return c.json({ items: [], source: "db" });
+  if (blocked.has(id)) return c.json({ items: [], lockedCount: 0, teasers: [], source: "db" });
 
-  const { data, error } = await visibleVideosQuery()
+  const isOwner = viewer.ownCreatorIds.has(id) || viewer.isAdmin;
+  const db = getServiceDb()!;
+  // Owners see all their own listable videos (including private) on their
+  // profile; everyone else starts from the shared non-private base query.
+  const baseQuery = isOwner
+    ? db
+        .from("videos")
+        .select(VIDEO_SELECT)
+        .eq("status", "ready")
+        .in("moderation_status", ["visible", "limited", "age_restricted"])
+    : visibleVideosQuery();
+  const { data, error } = await baseQuery
     .eq("creator_id", id)
     .order("created_at", { ascending: false })
     .limit(100);
   if (error) throw badRequest(error.message);
 
-  const items = applyFeedRules(data as unknown as VideoRow[], blocked).map(toFeedDto);
-  return c.json({ items, source: "db" });
+  const rows = applyFeedRules(data as unknown as VideoRow[], blocked);
+  const viewable = filterViewableRows(viewer, rows);
+  const hiddenRows = rows.filter((row) => !canViewVideo(viewer, rowToAccessVideo(row)));
+  const teasers = hiddenRows.filter((row) => row.visibility === "unlock_with_coins").map(toLockedTeaserDto);
+  const lockedCount = hiddenRows.length - teasers.length;
+
+  return c.json({ items: viewable.map(toFeedDto), lockedCount, teasers, source: "db" });
 });

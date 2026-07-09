@@ -97,13 +97,28 @@ describe("discovery endpoints (mock mode)", () => {
     }
   });
 
-  it("returns the premium feed with locked items only", async () => {
+  it("requires auth for the premium (member) feed", async () => {
     const res = await app.request("/feed/premium");
-    const body = (await res.json()) as { items: { isPremium: boolean; playbackUrl?: string }[] };
+    expect(res.status).toBe(401);
+  });
+
+  it("returns only the caller's accessible locked items in the premium feed", async () => {
+    // user_me has memberships for creator_001/004/007 and three coin unlocks.
+    const res = await app.request("/feed/premium", {
+      headers: { authorization: "Bearer token", "x-mock-user": "user_me" }
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      items: { id: string; creatorId: string; isPremium: boolean; playbackUrl?: string }[];
+    };
+    expect(body.items.length).toBeGreaterThan(0);
     for (const item of body.items) {
       expect(item.isPremium).toBe(true);
+      // Playback for gated content only ever comes from /videos/:id/access.
       expect(item.playbackUrl).toBeUndefined();
     }
+    // Creator_005's subscribers-only video must not appear (no membership).
+    expect(body.items.map((item) => item.id)).not.toContain("video_007");
   });
 
   it("returns creator storefront videos", async () => {

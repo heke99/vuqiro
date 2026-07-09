@@ -37,10 +37,12 @@ async function loadEventAggregates(videoIds: string[]): Promise<EventAggregates>
   if (!db || videoIds.length === 0) return aggregates;
 
   const since = new Date(Date.now() - 7 * 24 * 3_600_000).toISOString();
+  // Synthetic/seeded events never feed the ranking engine's signals.
   const { data } = await db
     .from("video_events")
     .select("video_id, name, value")
     .in("video_id", videoIds)
+    .eq("is_synthetic", false)
     .gte("created_at", since)
     .limit(5000);
 

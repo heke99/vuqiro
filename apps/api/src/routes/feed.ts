@@ -1,10 +1,11 @@
 import { Hono } from "hono";
 import { z } from "zod";
-import { mockCreators, mockVideos } from "@vuqiro/mock-data";
+import { mockCreators, mockFollows, mockVideos } from "@vuqiro/mock-data";
 import type { ServedAd } from "@vuqiro/types";
 import { selectAds, type AdViewer } from "../lib/adServing";
 import {
   applyFeedRules,
+  filterViewableRows,
   hiddenCreatorIds,
   notInterestedVideoIds,
   toFeedDto,
@@ -16,8 +17,9 @@ import { badRequest } from "../lib/errors";
 import { DEFAULT_FEED_SETTINGS, getPlatformSetting, type FeedSettings } from "../lib/platformSettings";
 import { rankFeedRows } from "../lib/feedRanking";
 import { getServiceDb, isBackendConfigured } from "../lib/supabase";
+import { getVisibleVideosForViewer, loadViewerContext, type ViewerContext } from "../lib/videoAccess";
 import type { AppEnv } from "../middleware/auth";
-import { attachUser } from "../middleware/auth";
+import { attachUser, requireUser } from "../middleware/auth";
 
 export const feedRoutes = new Hono<AppEnv>();
 
@@ -122,8 +124,9 @@ async function paginatedFeedResponse(options: {
   return { items: insertAds(page, ads, options.feedSettings.adFrequency), nextCursor };
 }
 
-export function mockFeed(): FeedItemDto[] {
-  return mockVideos.map((video) => {
+export function mockFeed(viewer?: ViewerContext): FeedItemDto[] {
+  const videos = viewer ? getVisibleVideosForViewer(viewer, mockVideos) : mockVideos;
+  return videos.map((video) => {
     const creator = mockCreators.find((candidate) => candidate.id === video.creatorId);
     return {
       id: video.id,
@@ -144,7 +147,7 @@ export function mockFeed(): FeedItemDto[] {
       commentCount: video.commentCount,
       shareCount: video.shareCount,
       watchCount: video.watchCount,
-      isPremium: video.isPremium,
+      isPremium: video.visibility !== "public",
       createdAt: video.createdAt
     };
   });
@@ -154,10 +157,13 @@ feedRoutes.get("/for-you", async (c) => {
   const cursor = decodeCursor(c.req.query("cursor"));
   const sessionId = c.req.query("session") ?? undefined;
   const feedSettings = await getPlatformSetting("feed", DEFAULT_FEED_SETTINGS);
+  const profile = c.get("profile");
+  // Per-viewer access filter runs BEFORE ranking on every surface.
+  const viewer = await loadViewerContext(profile?.id);
 
   if (!isBackendConfigured()) {
     // Mock mode paginates the deterministic mock feed and inserts mock ads.
-    const all = mockFeed();
+    const all = mockFeed(viewer);
     const start = cursor ? all.findIndex((item) => item.id === cursor.id) + 1 : 0;
     const page = all.slice(start, start + feedSettings.pageSize);
     const ads = await selectAds({ personalizedAdsOptIn: false }, "feed", feedSettings.maxAdsPerPage);
@@ -169,7 +175,6 @@ feedRoutes.get("/for-you", async (c) => {
     return c.json({ items, nextCursor, source: "mock" });
   }
 
-  const profile = c.get("profile");
   const [hidden, notInterested] = await Promise.all([
     hiddenCreatorIds(profile?.id),
     notInterestedVideoIds(profile?.id)
@@ -180,8 +185,9 @@ feedRoutes.get("/for-you", async (c) => {
   const { data, error } = await query;
   if (error) throw badRequest(error.message);
 
-  const visible = applyFeedRules(data as unknown as VideoRow[], hidden).filter(
-    (row) => !notInterested.has(row.id)
+  const visible = filterViewableRows(
+    viewer,
+    applyFeedRules(data as unknown as VideoRow[], hidden).filter((row) => !notInterested.has(row.id))
   );
   const ranked = await rankFeedRows(visible, profile?.id);
   const { items, nextCursor } = await paginatedFeedResponse({
@@ -196,11 +202,16 @@ feedRoutes.get("/for-you", async (c) => {
   return c.json({ items, nextCursor, source: "db" });
 });
 
-/** Trending: highest engagement over the recent window. */
+/**
+ * Trending: highest engagement over the recent window. Trending is a fully
+ * public surface, so only public videos may appear (matching the trend
+ * snapshot job in lib/trending.ts).
+ */
 feedRoutes.get("/trending", async (c) => {
   const feedSettings = await getPlatformSetting("feed", DEFAULT_FEED_SETTINGS);
   if (!isBackendConfigured()) {
     const items = mockFeed()
+      .filter((item) => item.visibility === "public")
       .sort((a, b) => b.watchCount - a.watchCount)
       .slice(0, feedSettings.pageSize)
       .map((item) => ({ kind: "video" as const, ...item }));
@@ -208,7 +219,10 @@ feedRoutes.get("/trending", async (c) => {
   }
   const profile = c.get("profile");
   const blocked = await hiddenCreatorIds(profile?.id);
-  const { data, error } = await visibleVideosQuery().order("watch_count", { ascending: false }).limit(50);
+  const { data, error } = await visibleVideosQuery()
+    .eq("visibility", "public")
+    .order("watch_count", { ascending: false })
+    .limit(50);
   if (error) throw badRequest(error.message);
   const items = applyFeedRules(data as unknown as VideoRow[], blocked)
     .slice(0, feedSettings.pageSize * 2)
@@ -229,36 +243,43 @@ feedRoutes.get("/sound/:id", async (c) => {
   if (videoIds.length === 0) return c.json({ items: [], soundId, source: "db" });
 
   const profile = c.get("profile");
-  const blocked = await hiddenCreatorIds(profile?.id);
+  const [viewer, blocked] = await Promise.all([loadViewerContext(profile?.id), hiddenCreatorIds(profile?.id)]);
   const { data } = await visibleVideosQuery().in("id", videoIds).order("watch_count", { ascending: false }).limit(50);
-  const items = applyFeedRules((data ?? []) as unknown as VideoRow[], blocked).map((row) => ({
-    kind: "video" as const,
-    ...toFeedDto(row)
-  }));
+  const items = filterViewableRows(viewer, applyFeedRules((data ?? []) as unknown as VideoRow[], blocked)).map(
+    (row) => ({
+      kind: "video" as const,
+      ...toFeedDto(row)
+    })
+  );
   return c.json({ items, soundId, source: "db" });
 });
 
 feedRoutes.get("/following", async (c) => {
+  const profile = c.get("profile");
   if (!isBackendConfigured()) {
-    const items = mockFeed().filter((item) => item.creatorVerified);
+    if (!profile) return c.json({ items: [], source: "mock" });
+    const viewer = await loadViewerContext(profile.id);
+    const followed = new Set(
+      mockFollows.filter((follow) => follow.userId === profile.id).map((follow) => follow.creatorId)
+    );
+    const items = mockFeed(viewer).filter((item) => followed.has(item.creatorId));
     return c.json({ items, source: "mock" });
   }
   const db = getServiceDb()!;
-  const profile = c.get("profile");
   if (!profile) return c.json({ items: [], source: "db" });
 
   const { data: follows } = await db.from("follows").select("creator_id").eq("follower_id", profile.id);
   const creatorIds = (follows ?? []).map((row) => row.creator_id);
   if (creatorIds.length === 0) return c.json({ items: [], source: "db" });
 
-  const blocked = await hiddenCreatorIds(profile.id);
+  const [viewer, blocked] = await Promise.all([loadViewerContext(profile.id), hiddenCreatorIds(profile.id)]);
   const { data, error } = await visibleVideosQuery()
     .in("creator_id", creatorIds)
     .order("created_at", { ascending: false })
     .limit(50);
   if (error) throw badRequest(error.message);
 
-  const items = applyFeedRules(data as unknown as VideoRow[], blocked).map(toFeedDto);
+  const items = filterViewableRows(viewer, applyFeedRules(data as unknown as VideoRow[], blocked)).map(toFeedDto);
   return c.json({ items, source: "db" });
 });
 
@@ -269,13 +290,14 @@ feedRoutes.get("/hashtag/:tag", async (c) => {
     .max(40)
     .transform((value) => value.toLowerCase().replace(/^#/, ""))
     .parse(c.req.param("tag"));
+  const profile = c.get("profile");
+  const viewer = await loadViewerContext(profile?.id);
 
   if (!isBackendConfigured()) {
-    const items = mockFeed().filter((item) => item.hashtags.includes(tag));
+    const items = mockFeed(viewer).filter((item) => item.hashtags.includes(tag));
     return c.json({ items, tag, source: "mock" });
   }
 
-  const profile = c.get("profile");
   const blocked = await hiddenCreatorIds(profile?.id);
   const { data, error } = await visibleVideosQuery()
     .contains("hashtags", [tag])
@@ -283,24 +305,32 @@ feedRoutes.get("/hashtag/:tag", async (c) => {
     .limit(50);
   if (error) throw badRequest(error.message);
 
-  const items = applyFeedRules(data as unknown as VideoRow[], blocked).map(toFeedDto);
+  const items = filterViewableRows(viewer, applyFeedRules(data as unknown as VideoRow[], blocked)).map(toFeedDto);
   return c.json({ items, tag, source: "db" });
 });
 
-feedRoutes.get("/premium", async (c) => {
+/**
+ * The member ("exclusive") feed: gated videos from creators the caller has
+ * access to — via membership, coin unlocks, grants or ownership. Requires
+ * auth; this is never a browse-everyone's-locked-content surface, and it
+ * never exposes playback URLs (playback goes through /videos/:id/access).
+ */
+feedRoutes.get("/premium", requireUser, async (c) => {
+  const profile = c.get("profile")!;
+  const viewer = await loadViewerContext(profile.id);
+
   if (!isBackendConfigured()) {
-    const items = mockFeed().filter((item) => item.isPremium);
+    const items = mockFeed(viewer).filter((item) => item.visibility !== "public");
     return c.json({ items, source: "mock" });
   }
 
-  const profile = c.get("profile");
-  const blocked = await hiddenCreatorIds(profile?.id);
+  const blocked = await hiddenCreatorIds(profile.id);
   const { data, error } = await visibleVideosQuery()
-    .in("visibility", ["subscribers_only", "premium_tier_only", "unlock_with_coins"])
+    .in("visibility", ["subscribers_only", "premium_tier_only", "unlock_with_coins", "followers_only"])
     .order("created_at", { ascending: false })
     .limit(50);
   if (error) throw badRequest(error.message);
 
-  const items = applyFeedRules(data as unknown as VideoRow[], blocked).map(toFeedDto);
+  const items = filterViewableRows(viewer, applyFeedRules(data as unknown as VideoRow[], blocked)).map(toFeedDto);
   return c.json({ items, source: "db" });
 });

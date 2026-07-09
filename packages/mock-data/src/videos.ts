@@ -38,7 +38,11 @@ const seeds: VideoSeed[] = [
   ["video_022", "creator_003", "RLS policies explained with pizza.", ["tech", "database", "security"], "Tech", "public", 5600, 62000, 98],
   ["video_023", "creator_004", "Knife skills: the only 3 cuts you need.", ["food", "skills", "kitchen"], "Food", "public", 22100, 350000, 97],
   ["video_024", "creator_005", "Handstand progress: month 1 to month 6.", ["fitness", "handstand", "progress"], "Fitness", "public", 19400, 300000, 98],
-  ["video_025", "creator_008", "Subscriber-only lookbook: spring drop.", ["fashion", "lookbook", "exclusive"], "Fashion", "subscribers_only", 4800, 39000, 94, { requiredTier: "support", isPremium: true }]
+  ["video_025", "creator_008", "Subscriber-only lookbook: spring drop.", ["fashion", "lookbook", "exclusive"], "Fashion", "subscribers_only", 4800, 39000, 94, { requiredTier: "support", isPremium: true }],
+  // Access-scenario fixtures: a private draft (owner/admin only) and a
+  // followers-only clip, so every visibility mode is testable in mock mode.
+  ["video_026", "creator_003", "Private: unreleased build walkthrough.", ["build", "wip"], "Tech", "private", 0, 0, 99],
+  ["video_027", "creator_002", "Follower exclusive: packing for 6 months on the road.", ["travel", "packing", "followers"], "Travel", "followers_only", 1400, 12000, 97]
 ];
 
 /** Public sample streams for development playback (no credentials needed). */
@@ -69,7 +73,9 @@ export const mockVideos: Video[] = seeds.map(
     revenue: extras?.isPremium ? Math.round(watchCount / 200) : 0,
     isPremium: false,
     safetyScore,
-    playbackUrl: visibility === "public" ? sampleStreams[index % sampleStreams.length] : undefined,
+    // Every mock video has a playable URL. API surfaces strip it for gated
+    // content; only the entitlement-checked /videos/:id/access returns it.
+    playbackUrl: sampleStreams[index % sampleStreams.length],
     durationSeconds: 24 + ((index * 7) % 36),
     createdAt: new Date(Date.UTC(2026, 5, 1 + index, 12)).toISOString(),
     ...extras
