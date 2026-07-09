@@ -14,6 +14,9 @@
     "lint": "pnpm -r lint",
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r test",
+    "test:video-access": "pnpm --filter api test:video-access",
+    "seed:demo-creators": "pnpm --filter api seed:demo-creators",
+    "seed:demo-creators:cleanup": "pnpm --filter api seed:demo-creators:cleanup",
     "format": "prettier --write .",
     "fetch:references": "bash scripts/fetch-open-source-references.sh"
   },
