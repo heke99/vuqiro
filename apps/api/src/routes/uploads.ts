@@ -4,7 +4,7 @@ import { getVideoProvider } from "@vuqiro/services";
 import { badRequest, forbidden, notFound } from "../lib/errors";
 import { checkRapidUploads } from "../lib/fraudSignals";
 import { precheckModeration } from "../lib/moderationPrecheck";
-import { preparePlaybackUrl } from "../lib/playback";
+import { hasPlaybackSigning, preparePlaybackUrl } from "../lib/playback";
 import { enforceRateLimit } from "../lib/rateLimit";
 import { getServiceDb, isBackendConfigured } from "../lib/supabase";
 import type { AppEnv } from "../middleware/auth";
@@ -95,6 +95,12 @@ uploadRoutes.post("/videos/uploads", requireUser, async (c) => {
 
   await checkRapidUploads(creator.id);
 
+  // Non-public videos get a signed playback policy when signing keys are
+  // configured, so a leaked stream URL is unplayable without a short-lived
+  // server-issued token. (Without keys we keep the public policy: the URL is
+  // still only released by the entitlement-checked /videos/:id/access.)
+  const playbackPolicy = body.visibility !== "public" && hasPlaybackSigning() ? "signed" : "public";
+
   const { data: video, error: videoError } = await db
     .from("videos")
     .insert({
@@ -116,7 +122,8 @@ uploadRoutes.post("/videos/uploads", requireUser, async (c) => {
   const upload = await provider.createDirectUpload({
     videoId: video.id,
     creatorId: creator.id,
-    maxDurationSeconds: UPLOAD_LIMITS.maxDurationSeconds
+    maxDurationSeconds: UPLOAD_LIMITS.maxDurationSeconds,
+    playbackPolicy
   });
 
   const { error: assetError } = await db.from("video_assets").insert({

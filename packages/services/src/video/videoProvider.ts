@@ -19,6 +19,13 @@ export interface CreateDirectUploadParams {
   videoId: string;
   creatorId: string;
   maxDurationSeconds: number;
+  /**
+   * Provider playback policy for the new asset. Non-public (members-only,
+   * followers-only, coin-unlock, private) videos should use "signed" so a
+   * leaked stream URL is unplayable without a server-issued token. Defaults
+   * to "public".
+   */
+  playbackPolicy?: "public" | "signed";
 }
 
 export interface DirectUpload {

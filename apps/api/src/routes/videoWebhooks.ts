@@ -88,7 +88,12 @@ videoWebhookRoutes.post("/video-provider/webhook", async (c) => {
     case "video.asset.ready": {
       const assetId = event.data.id;
       const videoId = event.data.passthrough;
-      const playbackId = event.data.playback_ids?.find((candidate) => candidate.policy === "public")?.id;
+      // Public assets carry a public playback id; gated/private uploads use a
+      // signed-policy id whose URL only plays with a server-issued token
+      // (issued by preparePlaybackUrl after the access check).
+      const playbackId = (
+        event.data.playback_ids?.find((candidate) => candidate.policy === "public") ?? event.data.playback_ids?.[0]
+      )?.id;
       const playbackUrl = playbackId ? `https://stream.mux.com/${playbackId}.m3u8` : null;
       const thumbnailUrl = playbackId ? `https://image.mux.com/${playbackId}/thumbnail.jpg?time=1` : null;
 

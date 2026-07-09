@@ -1,5 +1,5 @@
 import { loadEnv } from "@vuqiro/config";
-import { preparePlaybackUrl } from "./playback";
+import { preparePlaybackUrl, prepareThumbnailUrl } from "./playback";
 import { getServiceDb } from "./supabase";
 import { canViewVideo, type AccessVideo, type ViewerContext } from "./videoAccess";
 
@@ -92,7 +92,7 @@ export function toFeedDto(row: VideoRow): FeedItemDto {
     requiredTier: row.required_tier ?? undefined,
     // Server-side entitlement rule: locked content never exposes playback.
     playbackUrl: locked ? undefined : preparePlaybackUrl(row.playback_url),
-    thumbnailUrl: row.thumbnail_url ?? undefined,
+    thumbnailUrl: prepareThumbnailUrl(row.thumbnail_url),
     likeCount: row.like_count,
     commentCount: row.comment_count,
     shareCount: row.share_count,

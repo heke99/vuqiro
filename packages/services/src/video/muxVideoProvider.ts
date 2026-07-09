@@ -85,7 +85,7 @@ export class MuxVideoProvider implements VideoProvider {
     const body = {
       cors_origin: this.config.uploadOrigin ?? "*",
       new_asset_settings: {
-        playback_policy: ["public"],
+        playback_policy: [params.playbackPolicy ?? "public"],
         passthrough: params.videoId,
         video_quality: "basic"
       }
@@ -103,7 +103,11 @@ export class MuxVideoProvider implements VideoProvider {
 
   async getAsset(assetId: string): Promise<ProviderVideoAsset> {
     const result = await this.request<MuxAssetResponse>(`/video/v1/assets/${assetId}`);
-    const playbackId = result.data.playback_ids?.find((candidate) => candidate.policy === "public")?.id;
+    // Prefer the public playback id; signed-policy assets fall back to their
+    // signed id (URLs built from it only play with a server-issued token).
+    const playbackId = (
+      result.data.playback_ids?.find((candidate) => candidate.policy === "public") ?? result.data.playback_ids?.[0]
+    )?.id;
     return {
       assetId: result.data.id,
       status: mapStatus(result.data.status),
