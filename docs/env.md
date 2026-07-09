@@ -75,6 +75,17 @@ missing.
 | `NEXT_PUBLIC_API_URL` | yes (admin deploys) | Admin/advertiser portal → API base URL. |
 | `NEXT_PUBLIC_ADMIN_ALLOW_MOCK` / `ADMIN_ALLOW_MOCK` | never in prod | Explicit override to allow admin mock identity (development tooling only). |
 
+## Demo / seed controls (local & staging only)
+
+| Variable | Required in prod | Purpose |
+|---|---|---|
+| `DEMO_MODE` | never (warning if set) | Keeps demo/seeded (`is_demo`) content visible in feeds/search/trending/rankings. Production without it always excludes demo content and synthetic metrics. |
+| `ALLOW_DEMO_SEED` | never | Required (`=true`) to run `pnpm seed:demo-creators`. The seed additionally refuses `NODE_ENV`/`EXPO_PUBLIC_APP_ENV=production`. |
+| `ALLOW_DEMO_SEED_REMOTE` | never | Additionally required when the Supabase URL is not local. Staging only — never point the seed at production. |
+
+See `docs/architecture/video-access-control.md` for the full access model
+and seed documentation.
+
 ## Failure behavior
 
 - `assertProductionSafety()` runs at API boot: in **production**, missing
