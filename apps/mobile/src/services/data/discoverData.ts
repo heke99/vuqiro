@@ -74,7 +74,8 @@ function mockVideoToDiscover(video: (typeof mockVideos)[number]): DiscoverVideo 
 function mockTrending(): TrendingData {
   const creators = mockCreators.map(mockCreatorToDiscover);
   const hashtagCounts = new Map<string, number>();
-  for (const video of mockVideos) {
+  // Trending is a public surface: only public videos feed its signals.
+  for (const video of mockVideos.filter((candidate) => candidate.visibility === "public")) {
     for (const tag of video.hashtags) {
       hashtagCounts.set(tag, (hashtagCounts.get(tag) ?? 0) + video.watchCount);
     }
@@ -140,7 +141,10 @@ function mockSearch(term: string): SearchResults {
         (creator.category ?? "").toLowerCase().includes(term)
     )
     .map(mockCreatorToDiscover);
-  const videos = mockVideos
+  // Mirrors the API's anonymous search rules: only public videos (and their
+  // hashtags) are searchable without entitlements.
+  const publicVideos = mockVideos.filter((video) => video.visibility === "public");
+  const videos = publicVideos
     .filter(
       (video) =>
         video.caption.toLowerCase().includes(term) ||
@@ -148,7 +152,7 @@ function mockSearch(term: string): SearchResults {
         video.hashtags.some((tag) => tag.toLowerCase().includes(term))
     )
     .map(mockVideoToDiscover);
-  const hashtags = [...new Set(mockVideos.flatMap((video) => video.hashtags))].filter((tag) =>
+  const hashtags = [...new Set(publicVideos.flatMap((video) => video.hashtags))].filter((tag) =>
     tag.includes(term)
   );
   return { creators, videos, hashtags, isLive: false };

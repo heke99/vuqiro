@@ -49,6 +49,13 @@ export interface VuqiroEnv {
   adminUrl?: string;
   /** Comma-separated allowlist of browser origins for the API. */
   corsOrigins: string[];
+  /**
+   * Explicit demo mode. When true, demo/seeded content (is_demo rows) stays
+   * visible in feeds/search/trending even in production-like environments.
+   * Production without DEMO_MODE always excludes demo content and synthetic
+   * metrics from ranking and reporting.
+   */
+  demoMode: boolean;
 }
 
 type EnvSource = Record<string, string | undefined>;
@@ -119,7 +126,8 @@ export function loadEnv(source: EnvSource = typeof process !== "undefined" ? pro
     apiPort: Number(str(source, "API_PORT") ?? "3002"),
     apiBaseUrl: str(source, "API_BASE_URL") ?? "http://localhost:3002",
     adminUrl: str(source, "ADMIN_URL"),
-    corsOrigins
+    corsOrigins,
+    demoMode: str(source, "DEMO_MODE") === "true"
   };
 
   envSchema.parse({
@@ -213,6 +221,11 @@ export function checkProductionSafety(env: VuqiroEnv): ProductionSafetyReport {
   }
   if (env.appEnv === "production" && env.corsOrigins.length === 0) {
     warnings.push("CORS_ORIGINS is empty — browser clients (admin console) will be blocked by CORS.");
+  }
+  if (env.appEnv === "production" && env.demoMode) {
+    warnings.push(
+      "DEMO_MODE=true in production — demo/seeded content will be visible in feeds and rankings. Only use this for explicitly labeled demo deployments."
+    );
   }
 
   return { fatal, warnings };

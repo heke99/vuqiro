@@ -173,3 +173,7 @@ created_at desc)`; featured curation uses the partial `videos_featured_idx`.
 | `20260703150300_vuqiro_99_rls_indexes.sql` | RLS + indexes for the 50 new tables |
 | `20260703150400_vuqiro_99_storage.sql` | Storage buckets + policies |
 | `20260705120000_launch_gap_closure.sql` | Mutes, not-interested, featured, rate_limit_events, advertiser linkage, trigram indexes |
+| `20260705140000_messaging_completion.sql` | Direct messaging completion |
+| `20260705150000_ops_email.sql` | Ops + email notification jobs |
+| `20260705160000_security_hardening.sql` | Security hardening pass |
+| `20260709100000_video_access_and_demo_flags.sql` | Membership-aware `videos_select` RLS via `can_view_video()`; `is_demo`/`seed_batch` on profiles/videos/memberships; `is_synthetic`/`seed_batch` on video_events/feed_impressions (see `docs/architecture/video-access-control.md`) |

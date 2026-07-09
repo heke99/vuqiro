@@ -1,3 +1,4 @@
+import { shouldExcludeDemoContent } from "./feedQuery";
 import { getServiceDb } from "./supabase";
 
 /**
@@ -31,9 +32,11 @@ export async function computeTrendSnapshots(
   const capturedAt = new Date().toISOString();
 
   // Windowed event counts per video (impressions + weighted completes/likes).
+  // Synthetic/seeded events never influence trending.
   const { data: events } = await db
     .from("video_events")
     .select("video_id, name")
+    .eq("is_synthetic", false)
     .gte("created_at", since)
     .limit(20000);
 
@@ -60,14 +63,19 @@ export async function computeTrendSnapshots(
 
   if (videoScores.size === 0) return { captured: 0, capturedAt };
 
-  // Only safe, visible, ready videos may trend.
-  const { data: videoRows } = await db
+  // Only safe, visible, ready, public videos may trend. Demo/seeded videos
+  // are excluded in production unless the deployment runs in DEMO_MODE.
+  let eligibleQuery = db
     .from("videos")
     .select("id, creator_id, hashtags, sound_id")
     .in("id", [...videoScores.keys()])
     .eq("status", "ready")
     .eq("moderation_status", "visible")
     .eq("visibility", "public");
+  if (shouldExcludeDemoContent()) {
+    eligibleQuery = eligibleQuery.eq("is_demo", false);
+  }
+  const { data: videoRows } = await eligibleQuery;
 
   const eligible = (videoRows ?? []) as { id: string; creator_id: string; hashtags: string[]; sound_id: string | null }[];
 

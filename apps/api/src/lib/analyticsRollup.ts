@@ -50,6 +50,9 @@ export async function computeDailyRollups(
         .gte("created_at", dayStart)
         .lte("created_at", dayEnd)
         .not("video_id", "is", null)
+        // Synthetic/seeded impressions never enter analytics rollups (and so
+        // never reach creator dashboards, payout context or ad reporting).
+        .eq("is_synthetic", false)
         .limit(50000),
       db.from("likes").select("video_id").gte("created_at", dayStart).lte("created_at", dayEnd).limit(50000),
       db

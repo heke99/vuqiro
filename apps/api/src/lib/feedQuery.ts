@@ -1,5 +1,7 @@
-import { preparePlaybackUrl } from "./playback";
+import { loadEnv } from "@vuqiro/config";
+import { preparePlaybackUrl, prepareThumbnailUrl } from "./playback";
 import { getServiceDb } from "./supabase";
+import { canViewVideo, type AccessVideo, type ViewerContext } from "./videoAccess";
 
 export type FeedItemDto = {
   id: string;
@@ -33,6 +35,7 @@ export type VideoRow = {
   hashtags: string[];
   category: string | null;
   visibility: string;
+  status?: string;
   moderation_status: string;
   coin_unlock_price: number | null;
   required_tier: string | null;
@@ -58,7 +61,19 @@ export type VideoRow = {
 };
 
 export const VIDEO_SELECT =
-  "id, creator_id, caption, hashtags, category, visibility, moderation_status, coin_unlock_price, required_tier, playback_url, thumbnail_url, like_count, comment_count, share_count, save_count, watch_count, report_count, safety_score, duration_seconds, is_featured, created_at, creators (id, profile_id, verification_status, monetization_enabled, profiles (handle, display_name, status, follower_count))";
+  "id, creator_id, caption, hashtags, category, visibility, status, moderation_status, coin_unlock_price, required_tier, playback_url, thumbnail_url, like_count, comment_count, share_count, save_count, watch_count, report_count, safety_score, duration_seconds, is_featured, created_at, creators (id, profile_id, verification_status, monetization_enabled, profiles (handle, display_name, status, follower_count))";
+
+/** Maps a DB row to the shape the central access rules consume. */
+export function rowToAccessVideo(row: VideoRow): AccessVideo {
+  return {
+    id: row.id,
+    creatorId: row.creator_id,
+    visibility: row.visibility,
+    status: row.status ?? "ready",
+    moderationStatus: row.moderation_status,
+    requiredTier: row.required_tier
+  };
+}
 
 export function toFeedDto(row: VideoRow): FeedItemDto {
   const locked = row.visibility !== "public";
@@ -77,7 +92,7 @@ export function toFeedDto(row: VideoRow): FeedItemDto {
     requiredTier: row.required_tier ?? undefined,
     // Server-side entitlement rule: locked content never exposes playback.
     playbackUrl: locked ? undefined : preparePlaybackUrl(row.playback_url),
-    thumbnailUrl: row.thumbnail_url ?? undefined,
+    thumbnailUrl: prepareThumbnailUrl(row.thumbnail_url),
     likeCount: row.like_count,
     commentCount: row.comment_count,
     shareCount: row.share_count,
@@ -142,13 +157,81 @@ export function applyFeedRules(rows: VideoRow[], blocked: Set<string>): VideoRow
   });
 }
 
-/** Base query for publicly listable videos. */
+/** Per-viewer access filter for DB rows (see lib/videoAccess.ts). */
+export function filterViewableRows(viewer: ViewerContext, rows: VideoRow[]): VideoRow[] {
+  return rows.filter((row) => canViewVideo(viewer, rowToAccessVideo(row)));
+}
+
+/**
+ * True when demo/seeded content must be excluded from listing surfaces:
+ * production always excludes it unless the deployment is explicitly running
+ * in DEMO_MODE.
+ */
+export function shouldExcludeDemoContent(): boolean {
+  const env = loadEnv();
+  return env.appEnv === "production" && !env.demoMode;
+}
+
+/**
+ * Base query for listable videos (lifecycle + moderation + not private).
+ * This is only the shared pre-filter: callers MUST still apply the
+ * per-viewer access rules (`getVisibleVideosForViewer`) before returning
+ * rows, so members-only/followers-only content never reaches unauthorized
+ * viewers.
+ */
 export function visibleVideosQuery() {
   const db = getServiceDb()!;
-  return db
+  let query = db
     .from("videos")
     .select(VIDEO_SELECT)
     .eq("status", "ready")
     .in("moderation_status", ["visible", "limited", "age_restricted"])
     .neq("visibility", "private");
+  if (shouldExcludeDemoContent()) {
+    query = query.eq("is_demo", false);
+  }
+  return query;
+}
+
+/**
+ * Sanitized teaser for a coin-unlockable video the viewer has not purchased.
+ * Deliberately excludes playback AND thumbnail URLs (Mux thumbnails embed the
+ * playback id, which would leak a derivable stream URL) and any private
+ * metadata — only what a storefront needs to sell the unlock.
+ */
+export type LockedTeaserDto = {
+  id: string;
+  creatorId: string;
+  caption: string;
+  visibility: string;
+  coinUnlockPrice?: number;
+  requiredTier?: string;
+  likeCount: number;
+  watchCount: number;
+  isPremium: true;
+  locked: true;
+};
+
+export function toLockedTeaserDto(row: {
+  id: string;
+  creator_id: string;
+  caption: string;
+  visibility: string;
+  coin_unlock_price: number | null;
+  required_tier: string | null;
+  like_count: number;
+  watch_count: number;
+}): LockedTeaserDto {
+  return {
+    id: row.id,
+    creatorId: row.creator_id,
+    caption: row.caption,
+    visibility: row.visibility,
+    coinUnlockPrice: row.coin_unlock_price ?? undefined,
+    requiredTier: row.required_tier ?? undefined,
+    likeCount: row.like_count,
+    watchCount: Number(row.watch_count),
+    isPremium: true,
+    locked: true
+  };
 }

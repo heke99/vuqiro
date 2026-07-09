@@ -26,8 +26,10 @@ export default function HashtagFeed() {
       setLoading(true);
       try {
         if (isDemoMode()) {
+          // Mirrors the API's anonymous rules: hashtag pages show public
+          // videos only.
           const demoEntries: FeedEntry[] = mockVideos
-            .filter((video) => video.hashtags.includes(normalizedTag))
+            .filter((video) => video.visibility === "public" && video.hashtags.includes(normalizedTag))
             .map((video) => ({
               kind: "video",
               video,

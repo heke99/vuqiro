@@ -256,6 +256,93 @@ end
 \$\$;
 "
 
+echo "==> Video access + demo flag assertions"
+run_sql "$DB_NAME" "
+do \$\$
+declare
+  v_viewer_auth uuid;
+  v_owner_auth uuid;
+  v_viewer_profile uuid;
+  v_locked public.videos;
+  v_public public.videos;
+  v_membership uuid;
+begin
+  -- New helper functions exist.
+  if to_regprocedure('public.can_view_video(public.videos)') is null then
+    raise exception 'can_view_video(videos) missing';
+  end if;
+  if to_regprocedure('public.has_creator_membership(uuid, text)') is null then
+    raise exception 'has_creator_membership(uuid, text) missing';
+  end if;
+
+  -- Demo/synthetic flag columns exist.
+  perform 1 from information_schema.columns
+    where table_schema = 'public'
+      and (table_name, column_name) in (
+        ('profiles','is_demo'), ('profiles','seed_batch'),
+        ('videos','is_demo'), ('videos','seed_batch'),
+        ('creator_memberships','is_demo'), ('creator_memberships','seed_batch'),
+        ('video_events','is_synthetic'), ('video_events','seed_batch'),
+        ('feed_impressions','is_synthetic'), ('feed_impressions','seed_batch')
+      )
+    having count(*) = 10;
+  if not found then
+    raise exception 'demo/synthetic flag columns are missing';
+  end if;
+
+  select p.auth_user_id, p.id into v_viewer_auth, v_viewer_profile
+    from public.profiles p where p.handle = 'vuqiro_viewer';
+  select p.auth_user_id into v_owner_auth
+    from public.profiles p where p.handle = 'noorbuilds';
+  select v.* into v_locked from public.videos v where v.visibility = 'subscribers_only' limit 1;
+  select v.* into v_public from public.videos v where v.visibility = 'public' limit 1;
+  if v_locked.id is null or v_public.id is null then
+    raise exception 'seed videos for access assertions missing';
+  end if;
+
+  -- Anonymous: public viewable, members-only not.
+  perform set_config('request.jwt.claim.sub', '', true);
+  if not public.can_view_video(v_public) then
+    raise exception 'anonymous viewer cannot see a public video';
+  end if;
+  if public.can_view_video(v_locked) then
+    raise exception 'anonymous viewer can see a members-only video';
+  end if;
+
+  -- Viewer without a membership for that creator: locked.
+  perform set_config('request.jwt.claim.sub', v_viewer_auth::text, true);
+  if public.can_view_video(v_locked) then
+    raise exception 'non-member can see a members-only video';
+  end if;
+
+  -- Active membership for the exact creator unlocks it.
+  insert into public.creator_memberships (profile_id, creator_id, tier, status, platform)
+  values (v_viewer_profile, v_locked.creator_id, 'support', 'active', 'admin_manual')
+  on conflict (profile_id, creator_id) do update set status = 'active', tier = 'support'
+  returning id into v_membership;
+  if not public.can_view_video(v_locked) then
+    raise exception 'active member cannot see the members-only video';
+  end if;
+
+  -- Expired membership must NOT grant access.
+  update public.creator_memberships set status = 'expired' where id = v_membership;
+  if public.can_view_video(v_locked) then
+    raise exception 'expired membership still grants members-only access';
+  end if;
+  delete from public.creator_memberships where id = v_membership;
+
+  -- The owning creator always sees their own gated video.
+  perform set_config('request.jwt.claim.sub', v_owner_auth::text, true);
+  if not public.can_view_video(v_locked) then
+    raise exception 'owner cannot see their own members-only video';
+  end if;
+
+  perform set_config('request.jwt.claim.sub', '', true);
+  raise notice 'video access + demo flag assertions passed';
+end
+\$\$;
+"
+
 TABLE_COUNT=$("$PSQL" -t -A -d "$DB_NAME" -c "select count(*) from pg_tables where schemaname='public'")
 if [ "$TABLE_COUNT" -lt 92 ]; then
   echo "ERROR: expected at least 92 public tables, found $TABLE_COUNT" >&2

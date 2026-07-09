@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { Hono } from "hono";
 import { z } from "zod";
 import { badRequest, notFound } from "../lib/errors";
+import { preparePlaybackUrl, prepareThumbnailUrl } from "../lib/playback";
 import { enforceRateLimit } from "../lib/rateLimit";
 import { getServiceDb, isBackendConfigured } from "../lib/supabase";
 import { safeHttpUrl } from "../lib/validation";
@@ -384,8 +385,10 @@ function toOwnedVideoItem(row: SavedVideoRow) {
     hashtags: video.hashtags,
     visibility: video.visibility,
     moderationStatus: video.moderation_status,
-    thumbnailUrl: video.thumbnail_url ?? undefined,
-    playbackUrl: locked ? undefined : (video.playback_url ?? undefined),
+    thumbnailUrl: prepareThumbnailUrl(video.thumbnail_url),
+    // Locked items never expose playback here (that requires the
+    // entitlement-checked /videos/:id/access); public URLs are signed.
+    playbackUrl: locked ? undefined : preparePlaybackUrl(video.playback_url),
     likeCount: video.like_count,
     commentCount: video.comment_count,
     shareCount: video.share_count,

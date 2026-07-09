@@ -2,11 +2,18 @@ import { Hono } from "hono";
 import { z } from "zod";
 import { mockComments, mockVideos } from "@vuqiro/mock-data";
 import { badRequest, notFound } from "../lib/errors";
-import { blockedCreatorIds, toFeedDto, visibleVideosQuery, type VideoRow } from "../lib/feedQuery";
+import { blockedCreatorIds, rowToAccessVideo, toFeedDto, VIDEO_SELECT, type VideoRow } from "../lib/feedQuery";
 import { notifyProfile } from "../lib/notify";
 import { preparePlaybackUrl } from "../lib/playback";
 import { enforceRateLimit } from "../lib/rateLimit";
 import { getServiceDb, isBackendConfigured } from "../lib/supabase";
+import {
+  canViewVideo,
+  decideVideoAccess,
+  loadViewerContext,
+  type AccessVideo,
+  type ViewerContext
+} from "../lib/videoAccess";
 import type { AppEnv } from "../middleware/auth";
 import { attachUser, requireUser } from "../middleware/auth";
 
@@ -17,121 +24,107 @@ videoRoutes.use("*", attachUser);
 const idParam = z.string().min(1).max(64);
 
 /**
+ * Loads one video (any status) as an AccessVideo plus its raw source, in
+ * mock or DB mode, for the access-controlled endpoints below.
+ */
+async function loadAccessVideo(id: string): Promise<{
+  access: AccessVideo;
+  playbackUrl: string | null | undefined;
+  row?: VideoRow;
+} | null> {
+  if (!isBackendConfigured()) {
+    const video = mockVideos.find((candidate) => candidate.id === id);
+    if (!video) return null;
+    return { access: video, playbackUrl: video.playbackUrl };
+  }
+  const db = getServiceDb()!;
+  const { data, error } = await db.from("videos").select(VIDEO_SELECT).eq("id", id).maybeSingle();
+  if (error) throw badRequest(error.message);
+  if (!data) return null;
+  const row = data as unknown as VideoRow;
+  return { access: rowToAccessVideo(row), playbackUrl: row.playback_url, row };
+}
+
+/** Moderation rule: content from banned/suspended/deleted creators is
+ * hidden everywhere for everyone but the owner (feeds enforce this via
+ * applyFeedRules; detail/access endpoints via this check). */
+function creatorSuspended(row: VideoRow | undefined, viewer: ViewerContext): boolean {
+  const status = row?.creators?.profiles?.status;
+  if (!status || !["banned", "suspended", "deleted"].includes(status)) return false;
+  return !viewer.isAdmin && !viewer.ownCreatorIds.has(row!.creator_id);
+}
+
+/**
+ * Asserts the caller may view/interact with a video before an engagement
+ * action (like/save/share/comment). Unauthorized gated content behaves as if
+ * it does not exist (404) so ids are not probeable.
+ */
+async function requireViewableVideo(id: string, viewer: ViewerContext): Promise<void> {
+  const loaded = await loadAccessVideo(id);
+  if (!loaded || !canViewVideo(viewer, loaded.access) || creatorSuspended(loaded.row, viewer)) {
+    throw notFound("Video not found");
+  }
+}
+
+/**
  * Server-side access check for locked content. The playback URL for gated
  * videos is ONLY ever returned here, after verifying a real entitlement or
- * membership. Client-side state is never trusted.
+ * membership through the central access rules. Client-side state is never
+ * trusted.
  */
 videoRoutes.get("/:id/access", requireUser, async (c) => {
   const id = idParam.parse(c.req.param("id"));
   const profile = c.get("profile")!;
+  const source = isBackendConfigured() ? "db" : "mock";
 
-  if (!isBackendConfigured()) {
-    const video = mockVideos.find((candidate) => candidate.id === id);
-    if (!video) throw notFound("Video not found");
-    const isPublic = video.visibility === "public";
-    return c.json({
-      access: isPublic,
-      reason: isPublic ? "public" : "locked (mock mode has no entitlements)",
-      playbackUrl: isPublic ? video.playbackUrl : undefined,
-      source: "mock"
-    });
-  }
+  const [viewer, loaded] = await Promise.all([loadViewerContext(profile.id), loadAccessVideo(id)]);
+  if (!loaded || creatorSuspended(loaded.row, viewer)) throw notFound("Video not available");
 
-  const db = getServiceDb()!;
-  const { data: video } = await db
-    .from("videos")
-    .select("id, creator_id, visibility, required_tier, status, moderation_status, playback_url")
-    .eq("id", id)
-    .maybeSingle();
-  if (!video || video.status !== "ready" || !["visible", "limited", "age_restricted"].includes(video.moderation_status)) {
-    throw notFound("Video not available");
-  }
-
-  if (video.visibility === "public") {
-    return c.json({ access: true, reason: "public", playbackUrl: preparePlaybackUrl(video.playback_url), source: "db" });
-  }
-
-  // Owner always has access.
-  const { data: ownCreator } = await db
-    .from("creators")
-    .select("id")
-    .eq("profile_id", profile.id)
-    .eq("id", video.creator_id)
-    .maybeSingle();
-  if (ownCreator) {
-    return c.json({ access: true, reason: "owner", playbackUrl: preparePlaybackUrl(video.playback_url), source: "db" });
-  }
-
-  if (video.visibility === "followers_only") {
-    const { data: follow } = await db
-      .from("follows")
-      .select("id")
-      .eq("follower_id", profile.id)
-      .eq("creator_id", video.creator_id)
-      .maybeSingle();
-    if (follow) {
-      return c.json({ access: true, reason: "follower", playbackUrl: preparePlaybackUrl(video.playback_url), source: "db" });
+  const decision = decideVideoAccess(viewer, loaded.access);
+  if (!decision.allowed) {
+    // Non-listable content 404s; entitlement failures 403 with the reason the
+    // client needs to render the right CTA (follow/subscribe/unlock).
+    if (decision.reason === "unavailable" || decision.reason === "private") {
+      throw notFound("Video not available");
     }
-    return c.json({ access: false, reason: "follow_required", source: "db" }, 403);
+    return c.json({ access: false, reason: decision.reason, source }, 403);
   }
-
-  if (video.visibility === "unlock_with_coins") {
-    const { data: entitlement } = await db
-      .from("creator_membership_entitlements")
-      .select("id")
-      .eq("profile_id", profile.id)
-      .eq("video_id", video.id)
-      .is("revoked_at", null)
-      .maybeSingle();
-    if (entitlement) {
-      return c.json({ access: true, reason: "coin_unlock", playbackUrl: preparePlaybackUrl(video.playback_url), source: "db" });
-    }
-    return c.json({ access: false, reason: "unlock_required", source: "db" }, 403);
-  }
-
-  // subscribers_only / premium_tier_only: verify an active membership at the
-  // required tier or above.
-  const tierRank = { support: 1, plus: 2, premium: 3 } as const;
-  const requiredRank = tierRank[(video.required_tier ?? "support") as keyof typeof tierRank];
-  const { data: membership } = await db
-    .from("creator_memberships")
-    .select("tier, status")
-    .eq("profile_id", profile.id)
-    .eq("creator_id", video.creator_id)
-    .in("status", ["active", "grace_period"])
-    .maybeSingle();
-  if (membership && tierRank[membership.tier as keyof typeof tierRank] >= requiredRank) {
-    return c.json({ access: true, reason: "membership", playbackUrl: preparePlaybackUrl(video.playback_url), source: "db" });
-  }
-  return c.json({ access: false, reason: "subscription_required", source: "db" }, 403);
+  return c.json({
+    access: true,
+    reason: decision.reason,
+    playbackUrl: preparePlaybackUrl(loaded.playbackUrl),
+    source
+  });
 });
 
 /**
- * Public video metadata by id. Applies the same visibility rules as feeds:
- * locked videos never expose playback here (that requires /:id/access), and
- * removed/blocked/private content 404s.
+ * Video metadata by id, per-viewer. Unauthorized gated/private content 404s
+ * (it must not be probeable), and locked videos never expose playback here
+ * (that requires /:id/access).
  */
 videoRoutes.get("/:id", async (c) => {
   const id = idParam.parse(c.req.param("id"));
+  const profile = c.get("profile");
+  const viewer = await loadViewerContext(profile?.id);
 
   if (!isBackendConfigured()) {
     const video = mockVideos.find((candidate) => candidate.id === id);
-    if (!video) throw notFound("Video not found");
+    if (!video || !canViewVideo(viewer, video)) throw notFound("Video not found");
     return c.json({
-      video: { ...video, playbackUrl: video.visibility === "public" ? video.playbackUrl : undefined },
+      video: {
+        ...video,
+        isPremium: video.visibility !== "public",
+        playbackUrl: video.visibility === "public" ? video.playbackUrl : undefined
+      },
       source: "mock"
     });
   }
 
-  const profile = c.get("profile");
-  const [hidden, { data, error }] = await Promise.all([
-    blockedCreatorIds(profile?.id),
-    visibleVideosQuery().eq("id", id).maybeSingle()
-  ]);
-  if (error) throw badRequest(error.message);
-  if (!data) throw notFound("Video not found");
-  const row = data as unknown as VideoRow;
-  if (hidden.has(row.creator_id)) throw notFound("Video not found");
+  const [hidden, loaded] = await Promise.all([blockedCreatorIds(profile?.id), loadAccessVideo(id)]);
+  if (!loaded?.row) throw notFound("Video not found");
+  const row = loaded.row;
+  if (hidden.has(row.creator_id) || creatorSuspended(row, viewer)) throw notFound("Video not found");
+  if (!canViewVideo(viewer, loaded.access)) throw notFound("Video not found");
   return c.json({ video: toFeedDto(row), source: "db" });
 });
 
@@ -156,6 +149,8 @@ videoRoutes.post("/:id/like", requireUser, async (c) => {
   const id = idParam.parse(c.req.param("id"));
   const profile = c.get("profile")!;
   enforceRateLimit(`like:${profile.id}`, 120, 60_000);
+  const viewer = await loadViewerContext(profile.id);
+  await requireViewableVideo(id, viewer);
   if (!isBackendConfigured()) return c.json({ liked: true, source: "mock" });
   const liked = await toggleRow("likes", profile.id, id);
   return c.json({ liked, source: "db" });
@@ -165,6 +160,8 @@ videoRoutes.post("/:id/save", requireUser, async (c) => {
   const id = idParam.parse(c.req.param("id"));
   const profile = c.get("profile")!;
   enforceRateLimit(`save:${profile.id}`, 120, 60_000);
+  const viewer = await loadViewerContext(profile.id);
+  await requireViewableVideo(id, viewer);
   if (!isBackendConfigured()) return c.json({ saved: true, source: "mock" });
   const saved = await toggleRow("saves", profile.id, id);
   return c.json({ saved, source: "db" });
@@ -210,6 +207,9 @@ videoRoutes.post("/:id/share", async (c) => {
   enforceRateLimit(`share:${profile?.id ?? "anon"}`, 60, 60_000);
   const body = shareBody.parse(await c.req.json().catch(() => ({})));
 
+  const viewer = await loadViewerContext(profile?.id);
+  await requireViewableVideo(id, viewer);
+
   if (!isBackendConfigured()) {
     return c.json({ shared: true, shareUrl: `https://vuqiro.app/v/${id}`, source: "mock" }, 201);
   }
@@ -250,6 +250,10 @@ videoRoutes.get("/:id/comments", async (c) => {
   const id = idParam.parse(c.req.param("id"));
   const limit = Math.min(Math.max(Number(c.req.query("limit") ?? "20"), 1), 50);
   const cursor = decodeCommentCursor(c.req.query("cursor") ?? undefined);
+
+  // Comments are part of the video's content: same access rules apply.
+  const viewer = await loadViewerContext(c.get("profile")?.id);
+  await requireViewableVideo(id, viewer);
 
   if (!isBackendConfigured()) {
     return c.json({
@@ -314,6 +318,9 @@ videoRoutes.post("/:id/comments", requireUser, async (c) => {
   const profile = c.get("profile")!;
   enforceRateLimit(`comment:${profile.id}`, 20, 60_000);
   const body = commentBody.parse(await c.req.json());
+
+  const viewer = await loadViewerContext(profile.id);
+  await requireViewableVideo(id, viewer);
 
   if (!isBackendConfigured()) {
     return c.json({ comment: { id: `mock_${Date.now()}`, videoId: id, text: body.text }, source: "mock" }, 201);

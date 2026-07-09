@@ -14,6 +14,9 @@ export default function WelcomeScreen() {
       </View>
       <Text style={styles.title}>Vuqiro</Text>
       <Text style={styles.subtitle}>Discover creators. Support what you love.</Text>
+      <Text style={styles.freeNote}>
+        Watching is free — browse the feed and public videos without an account or payment.
+      </Text>
       <View style={styles.actions}>
         <Button label="Create account" onPress={() => router.push("/(public)/create-account")} />
         <Button label="Sign in" variant="ghost" onPress={() => router.push("/(public)/sign-in")} />
@@ -50,6 +53,14 @@ const styles = StyleSheet.create({
     marginTop: spacing.sm,
     maxWidth: 280,
     lineHeight: 24
+  },
+  freeNote: {
+    color: colors.textSoft,
+    fontSize: 13,
+    textAlign: "center",
+    marginTop: spacing.md,
+    maxWidth: 300,
+    lineHeight: 19
   },
   actions: { width: "100%", gap: spacing.md, marginTop: spacing.xxl },
   legal: { color: colors.textMuted, marginTop: spacing.xxl, fontSize: 12 }

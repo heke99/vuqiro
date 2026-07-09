@@ -8,7 +8,10 @@
     "start": "tsx src/server.ts",
     "lint": "eslint src --ext .ts",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run --passWithNoTests"
+    "test": "vitest run --passWithNoTests",
+    "seed:demo-creators": "tsx src/seed/runDemoSeed.ts",
+    "seed:demo-creators:cleanup": "tsx src/seed/runDemoSeed.ts --cleanup",
+    "test:video-access": "vitest run src/lib/videoAccess.test.ts src/routes/videoAccess.routes.test.ts src/seed/demoSeed.test.ts src/seed/demoSeed.io.test.ts"
   },
   "dependencies": {
     "@hono/node-server": "^1.13.0",

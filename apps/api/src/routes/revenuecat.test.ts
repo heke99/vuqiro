@@ -83,10 +83,24 @@ describe("locked content access", () => {
   it("denies access to locked videos without entitlement (no URL leak)", async () => {
     const app = createApp();
     const res = await app.request("/videos/video_002/access", {
-      headers: { authorization: "Bearer token" }
+      headers: { authorization: "Bearer token", "x-mock-user": "user_free" }
     });
+    expect(res.status).toBe(403);
     const body = (await res.json()) as { access: boolean; playbackUrl?: string };
     expect(body.access).toBe(false);
     expect(body.playbackUrl).toBeUndefined();
+  });
+
+  it("grants access via a coin-unlock entitlement", async () => {
+    // user_me holds a coin-unlock entitlement for video_002 in the fixtures.
+    const app = createApp();
+    const res = await app.request("/videos/video_002/access", {
+      headers: { authorization: "Bearer token", "x-mock-user": "user_me" }
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { access: boolean; reason: string; playbackUrl?: string };
+    expect(body.access).toBe(true);
+    expect(body.reason).toBe("coin_unlock");
+    expect(body.playbackUrl).toBeTruthy();
   });
 });

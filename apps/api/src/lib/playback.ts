@@ -1,5 +1,5 @@
 import { loadEnv } from "@vuqiro/config";
-import { signPlaybackUrl, type PlaybackSigningConfig } from "@vuqiro/services";
+import { signPlaybackUrl, signThumbnailUrl, type PlaybackSigningConfig } from "@vuqiro/services";
 
 /**
  * Response-time playback URL signing. When Mux signing keys are configured,
@@ -19,6 +19,12 @@ function getSigningConfig(): PlaybackSigningConfig | null {
   return signingConfig;
 }
 
+/** True when Mux playback signing keys are configured. Gated uploads only
+ * request a signed playback policy when the API can actually issue tokens. */
+export function hasPlaybackSigning(): boolean {
+  return getSigningConfig() !== null;
+}
+
 export function preparePlaybackUrl(url: string | null | undefined): string | undefined {
   if (!url) return undefined;
   const config = getSigningConfig();
@@ -27,6 +33,19 @@ export function preparePlaybackUrl(url: string | null | undefined): string | und
     return signPlaybackUrl(url, config);
   } catch {
     // A signing failure must not break playback for public-policy assets.
+    return url;
+  }
+}
+
+/** Signs Mux thumbnail URLs (aud "t") when signing keys are configured, so
+ * poster frames of signed-policy assets stay protected like their streams. */
+export function prepareThumbnailUrl(url: string | null | undefined): string | undefined {
+  if (!url) return undefined;
+  const config = getSigningConfig();
+  if (!config) return url;
+  try {
+    return signThumbnailUrl(url, config);
+  } catch {
     return url;
   }
 }

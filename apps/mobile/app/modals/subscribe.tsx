@@ -66,8 +66,8 @@ export default function SubscribeModal() {
       title="Choose your support level"
       subtitle={
         creatorName
-          ? `Support ${creatorName} directly and unlock more from their world.`
-          : "Support creators directly and unlock more from their world."
+          ? `Membership unlocks ${creatorName}'s exclusive members-only videos. Public videos on Vuqiro are always free to watch.`
+          : "Membership unlocks a creator's exclusive members-only videos. Public videos on Vuqiro are always free to watch."
       }
     >
       {packages.map((pkg, index) => (
