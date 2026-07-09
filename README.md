@@ -36,14 +36,31 @@ pnpm dev:admin         # http://localhost:3001
 pnpm dev:api           # http://localhost:3002/health
 ```
 
+## Demo data (local/staging only)
+
+Public viewing on Vuqiro is always free; memberships only unlock a creator's
+exclusive videos. To populate local/staging with realistic, clearly-marked
+demo creators (12 creators × 10 playable videos: public + members-only +
+private, plus access-scenario test users):
+
+```bash
+ALLOW_DEMO_SEED=true pnpm seed:demo-creators           # idempotent
+ALLOW_DEMO_SEED=true pnpm seed:demo-creators:cleanup   # removes everything
+pnpm test:video-access                                 # access regression suite
+```
+
+The seed refuses to run in production, marks every row
+`is_demo`/`is_synthetic` + `seed_batch`, and never touches monetization/
+payout/ad tables. Full model: `docs/architecture/video-access-control.md`.
+
 ## Quality gates
 
 ```bash
 pnpm lint
 pnpm typecheck
-pnpm test                              # 270+ tests (api + mobile + admin + packages)
+pnpm test                              # 350+ tests (api + mobile + admin + packages)
 pnpm --filter admin build              # Next.js production build
-bash scripts/validate-migrations.sh    # schema + RLS + wallet + ads + hardening integrity (needs local Postgres; also runs in CI)
+bash scripts/validate-migrations.sh    # schema + RLS + video access + wallet + ads + hardening integrity (needs local Postgres; also runs in CI)
 ```
 
 ## Builds & launch

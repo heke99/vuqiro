@@ -45,6 +45,15 @@ async function loadAccessVideo(id: string): Promise<{
   return { access: rowToAccessVideo(row), playbackUrl: row.playback_url, row };
 }
 
+/** Moderation rule: content from banned/suspended/deleted creators is
+ * hidden everywhere for everyone but the owner (feeds enforce this via
+ * applyFeedRules; detail/access endpoints via this check). */
+function creatorSuspended(row: VideoRow | undefined, viewer: ViewerContext): boolean {
+  const status = row?.creators?.profiles?.status;
+  if (!status || !["banned", "suspended", "deleted"].includes(status)) return false;
+  return !viewer.isAdmin && !viewer.ownCreatorIds.has(row!.creator_id);
+}
+
 /**
  * Asserts the caller may view/interact with a video before an engagement
  * action (like/save/share/comment). Unauthorized gated content behaves as if
@@ -52,7 +61,9 @@ async function loadAccessVideo(id: string): Promise<{
  */
 async function requireViewableVideo(id: string, viewer: ViewerContext): Promise<void> {
   const loaded = await loadAccessVideo(id);
-  if (!loaded || !canViewVideo(viewer, loaded.access)) throw notFound("Video not found");
+  if (!loaded || !canViewVideo(viewer, loaded.access) || creatorSuspended(loaded.row, viewer)) {
+    throw notFound("Video not found");
+  }
 }
 
 /**
@@ -67,7 +78,7 @@ videoRoutes.get("/:id/access", requireUser, async (c) => {
   const source = isBackendConfigured() ? "db" : "mock";
 
   const [viewer, loaded] = await Promise.all([loadViewerContext(profile.id), loadAccessVideo(id)]);
-  if (!loaded) throw notFound("Video not available");
+  if (!loaded || creatorSuspended(loaded.row, viewer)) throw notFound("Video not available");
 
   const decision = decideVideoAccess(viewer, loaded.access);
   if (!decision.allowed) {
@@ -112,7 +123,7 @@ videoRoutes.get("/:id", async (c) => {
   const [hidden, loaded] = await Promise.all([blockedCreatorIds(profile?.id), loadAccessVideo(id)]);
   if (!loaded?.row) throw notFound("Video not found");
   const row = loaded.row;
-  if (hidden.has(row.creator_id)) throw notFound("Video not found");
+  if (hidden.has(row.creator_id) || creatorSuspended(row, viewer)) throw notFound("Video not found");
   if (!canViewVideo(viewer, loaded.access)) throw notFound("Video not found");
   return c.json({ video: toFeedDto(row), source: "db" });
 });
